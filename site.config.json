@@ -1,0 +1,22 @@
+{
+  "name": "Docket Wire",
+  "tagline": "Where East Africa's deals stand, and who still has to say yes",
+  "description": "Live dockets on the deals and disputes that reach East Africa's regulators and courts: every approval, challenge and date on the record, with its source.",
+  "lede": "Docket Wire keeps a live file on each deal and dispute in Kenya and the region: the regulators and courts it has to pass, every step on the record with its source, and the dates coming up.",
+  "url": "",
+  "language": "en-GB",
+  "defaultAuthor": "Docket Wire",
+  "contactEmail": "",
+  "subscribe": {
+    "formAction": "",
+    "emailField": "email"
+  },
+  "social": {
+    "linkedin": "",
+    "x": "",
+    "instagram": "",
+    "tiktok": "",
+    "youtube": "",
+    "whatsapp": ""
+  }
+}

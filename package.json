@@ -1,0 +1,12 @@
+{
+  "name": "docket-wire",
+  "private": true,
+  "description": "Docket Wire website. No dependencies: run node build.js.",
+  "scripts": {
+    "build": "node build.js",
+    "serve": "node build.js serve"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

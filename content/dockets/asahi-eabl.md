@@ -1,6 +1,8 @@
 ---
 number: 1 of 2026
 title: Asahi and EABL
+headline: Asahi has its competition clearance. It still can't close EABL.
+standfirst: Minority shareholders are appealing the CMA's exemption from a mandatory take-over offer, and a High Court order keeps EABL's ownership as it stood on 18 June until the Capital Markets Tribunal decides.
 summary: Asahi Group Holdings buying Diageo Kenya Limited, which holds about 65% of East African Breweries PLC, together with Diageo's stake in UDV (Kenya)
 kind: Acquisition of control of a listed company
 sector: Consumer

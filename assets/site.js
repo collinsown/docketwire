@@ -25,6 +25,7 @@
     document.body.removeChild(ta);
   };
   var pageUrl = function () { return location.href.split('#')[0]; };
+  var motion = 'IntersectionObserver' in window && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 
   /* ---------- filters on the dockets page ---------- */
   var form = $('[data-filter-form]');
@@ -117,9 +118,16 @@
     var start = +tl.getAttribute('data-start'), end = +tl.getAttribute('data-end'), W = +tl.getAttribute('data-w');
     var mark = $('[data-tl-today]', tl);
     var x = ((now.getTime() - start) / (end - start)) * W;
-    if (mark && x > 0 && x < W) mark.setAttribute('transform', 'translate(' + (x - +mark.getAttribute('data-x')).toFixed(1) + ' 0)');
     var toToday = function (smooth) { sc.scrollTo({ left: Math.max(0, x - sc.clientWidth * 0.62), behavior: smooth ? 'smooth' : 'auto' }); };
     toToday(false);
+    if (mark && x > 0 && x < W) {
+      var bx = +mark.getAttribute('data-x');
+      var land = 'translateX(' + (x - bx).toFixed(1) + 'px)';
+      if (motion) {
+        mark.style.transform = 'translateX(' + (sc.scrollLeft - bx).toFixed(1) + 'px)';
+        requestAnimationFrame(function () { requestAnimationFrame(function () { mark.style.transition = 'transform 1.4s cubic-bezier(.2,.7,.2,1)'; mark.style.transform = land; }); });
+      } else mark.style.transform = land;
+    }
     var jump = $('[data-tl-jump]');
     if (jump) { jump.hidden = false; jump.addEventListener('click', function () { toToday(true); sc.focus({ preventScroll: true }); }); }
     var down = null, moved = false;
@@ -362,6 +370,36 @@
     else if (e.key === '/' && !typing) { e.preventDefault(); open(); }
     else if (e.key === 'Escape') { if (pal && !pal.hidden) close(); if (tipFor) hideTip(); }
   });
+
+  /* ---------- motion: tracks draw in, docket sheets drop in, counts tick up ---------- */
+  var tickUp = function (el) {
+    var end = +el.getAttribute('data-count');
+    if (!(end > 0)) return;
+    var t0 = null, dur = Math.min(1400, 450 + end * 3);
+    var step = function (ts) {
+      if (t0 === null) t0 = ts;
+      var p = Math.min(1, (ts - t0) / dur);
+      el.textContent = String(Math.round(end * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) requestAnimationFrame(step);
+    };
+    el.textContent = '0';
+    requestAnimationFrame(step);
+  };
+  if (motion) {
+    var seenIO = new IntersectionObserver(function (list) {
+      list.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        var el = en.target;
+        seenIO.unobserve(el);
+        if (el.hasAttribute('data-count')) tickUp(el);
+        else el.classList.add(el.classList.contains('track') ? 'is-drawn' : 'is-in');
+      });
+    }, { rootMargin: '0px 0px -10% 0px', threshold: 0 });
+    $$('.track').forEach(function (t) { t.classList.add('will-draw'); seenIO.observe(t); });
+    $$('.sheet').forEach(function (t) { t.classList.add('will-drop'); seenIO.observe(t); });
+    $$('.mx').forEach(function (t) { t.classList.add('will-fill'); seenIO.observe(t); });
+    $$('[data-count]').forEach(function (t) { seenIO.observe(t); });
+  }
 
   /* ---------- install as an app, and keep pages for offline reading ---------- */
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {

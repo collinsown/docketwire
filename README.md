@@ -79,6 +79,8 @@ Statuses: `cleared`, `conditions` (cleared with conditions), `pending`, `hold` (
 
 **Close a docket** by setting `status: completed` (or `withdrawn`, or `blocked`) and `closed: 2026-10` in its front.
 
+**The front page** leads with the open docket that is held up by an order or a challenge. Give that docket a `headline` (a news line) and a `standfirst` (one sentence) in its front; without them the front page uses its title and summary. To choose the lead yourself, set `leadDocket` in `site.config.json` to the docket's file name.
+
 **A new regulator or court** goes in `content/authorities.csv` with a short code. Gates refer to it by that code, and it gets its own page once a docket names it.
 
 **Other dates** for the cause list, such as rate decisions and filing deadlines, go in `content/calendar.csv`.

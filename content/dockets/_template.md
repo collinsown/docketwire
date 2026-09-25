@@ -2,6 +2,8 @@
 number: 9 of 2026
 title: Buyer and Target
 summary: One sentence on who is doing what, and on which market
+# headline: a news line for the front page, used when this docket leads
+# standfirst: one sentence under that headline
 kind: Acquisition
 sector: Banking
 country: Kenya

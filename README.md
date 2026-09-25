@@ -4,16 +4,13 @@ Live dockets on the deals and disputes that reach East Africa's regulators and c
 
 The site is plain files. A small builder (`build.js`, no installs) turns the text files in `content/` into the website, and GitHub publishes it for free.
 
-## Put it online
+## Where it lives
 
-1. Create a free account at github.com.
-2. Click **+ > New repository**. Name it `docket-wire`, set it to **Public**, and create it.
-3. On the new repository, click **uploading an existing file**. Drag in everything in this folder except `dist`, then click **Commit changes**.
-4. Check that `.github/workflows/publish.yml` arrived. Browsers often skip folders whose names start with a dot. If it is missing, click **Add file > Create new file**, type `.github/workflows/publish.yml` as the name, paste in the contents of that file from this folder, and commit.
-5. Go to **Settings > Pages**. Under **Build and deployment**, set **Source** to **GitHub Actions**.
-6. Go to the **Actions** tab. When the "Publish site" run shows a green tick, the site is live at `https://YOUR-USERNAME.github.io/docket-wire/`. If the first run went before step 5, open it and click **Re-run all jobs**.
+The site is live at https://collinsown.github.io/docketwire/ and its files are in the GitHub repository `collinsown/docketwire`. Every change you commit republishes the site in about a minute, and it also rebuilds itself every morning at 06:00 Nairobi time, so dates that have passed drop off the cause list.
 
-After that, every change you commit republishes the site in about a minute. It also rebuilds itself every morning at 06:00 Nairobi time, so dates that have passed drop off the cause list.
+**To replace many files at once** (for example when you receive an updated zip): unzip it, open https://github.com/collinsown/docketwire/upload/main, open the unzipped folder, click on empty space in it, press Ctrl + A, drag everything into the upload box, wait for the list to finish, and click **Commit changes**. Files with the same names are replaced and new files are added. The `.github` folder may not come across; that is fine, because the publishing file is already in the repository.
+
+**To check a build**, open the **Actions** tab. A green tick next to "Publish site" means the new version is live. If it shows a red cross, open it and click **Re-run all jobs**.
 
 Everything in a public repository can be read by anyone, drafts included.
 
@@ -22,7 +19,7 @@ Everything in a public repository can be read by anyone, drafts included.
 Buy the domain from any registrar. For a `.co.ke` name, use a KENIC-accredited registrar. Then:
 
 1. In **Settings > Pages > Custom domain**, enter the address (for example `www.docketwire.co.ke`) and save.
-2. At the registrar, add a `CNAME` record for `www` pointing to `YOUR-USERNAME.github.io`. For the bare domain, add four `A` records pointing to `185.199.108.153`, `185.199.109.153`, `185.199.110.153` and `185.199.111.153`.
+2. At the registrar, add a `CNAME` record for `www` pointing to `collinsown.github.io`. For the bare domain, add four `A` records pointing to `185.199.108.153`, `185.199.109.153`, `185.199.110.153` and `185.199.111.153`.
 3. When GitHub shows the domain as verified, tick **Enforce HTTPS**.
 
 ## Email alerts with beehiiv
@@ -39,6 +36,8 @@ Sending is manual on the free plan: once a week, write the email in beehiiv from
 ## Keeping the dockets
 
 Every docket is one file in `content/dockets/`. To change one, open the file on GitHub, click the pencil, edit, and commit.
+
+**Write the story.** Every docket opens with three sections of plain prose above the gates: `## The story so far` (what the deal is and how it got here), `## Why it matters` (what it means for the market and for the people advising on it) and `## What to watch` (the next steps and the risks). Write them as connected paragraphs and keep them current when a gate moves. Any other `##` heading you add above `## Gates` is published the same way. List the articles the story relies on under `sources:` in the front of the file, one per line as `  - Publication, date | https://...`; they appear under the story as "Sources for this story".
 
 **Add what happened** as a line under `## Entries`:
 
@@ -68,7 +67,7 @@ Statuses: `cleared`, `conditions` (cleared with conditions), `pending`, `hold` (
 
 **Rates** are in `content/rates.csv`.
 
-**Explainers** are longer reads in `content/explainers/`. Copy `_template.md`, name the file with the date first (`2026-10-05-short-name.md`), and set `docket:` to the docket's file name so the two link to each other.
+**Analysis** pieces are the long reads in `content/explainers/` (the site calls them Analysis). Copy `_template.md`, name the file with the date first (`2026-10-05-short-name.md`), and set `docket:` to the docket's file name so the two link to each other. `points:` holds the key points shown in the box at the top of the piece, one per line, and every `##` heading in the body becomes an entry in the contents list beside it. A definition box is a quote block that starts with a `###` heading.
 
 Files whose names start with `_` are never published. If something is typed wrong, the build still runs and prints a note saying what to fix; you can read it under the **Actions** tab.
 
@@ -89,7 +88,13 @@ For a new matter, give me a complete new docket file based on the template.
 Use only facts a source states, put primary sources (company announcements,
 regulator decisions, court orders) first, and write sources as
 [Publication, date](link). Tell me what you could not confirm.
-Once a week, also draft a short explainer on the matter that moved most.
+Where a change affects the story, also give me rewritten versions of the
+docket's "The story so far", "Why it matters" and "What to watch" sections,
+in full connected paragraphs, with no em dashes.
+Once a week, also draft a long-form analysis (1,200 to 1,800 words) on the
+matter that moved most, in the explainer template's format, with four key
+points, a definition box for the main legal concept, the argument on each
+side, and a closing section on what to watch.
 ```
 
 Check each line against its source before you commit it.
@@ -101,7 +106,7 @@ With Node.js 18 or later installed, run `node build.js serve` in this folder and
 ## What is where
 
 - `content/dockets/` one file per matter
-- `content/explainers/` longer reads, each linked to a docket
+- `content/explainers/` the long-form analysis pieces, each linked to a docket
 - `content/authorities.csv` regulators, tribunals and courts
 - `content/calendar.csv` dates that belong to no docket
 - `content/rates.csv` the rates list

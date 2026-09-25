@@ -354,6 +354,19 @@ function docketNumber(raw) {
   return { n, y, label: `No. ${n} of ${y}`, sort: y * 10000 + n };
 }
 
+const NARRATIVE_SKIP = new Set(['gates', 'entries', 'docket', 'next', 'note']);
+function narrativeOf(body) {
+  const out = [];
+  let cur = null;
+  for (const line of String(body || '').replace(/\r\n?/g, '\n').split('\n')) {
+    const h = line.match(/^##\s+(.+?)\s*$/);
+    if (h) { cur = { title: h[1].trim(), lines: [] }; out.push(cur); continue; }
+    if (cur) cur.lines.push(line);
+  }
+  return out.filter((s) => !NARRATIVE_SKIP.has(s.title.toLowerCase()) && s.lines.join('').trim())
+    .map((s) => ({ title: s.title, slug: slugify(s.title), text: s.lines.join('\n').trim() }));
+}
+
 function loadDockets() {
   const out = [];
   for (const file of files(path.join(CONTENT, 'dockets'), '.md')) {
@@ -381,7 +394,7 @@ function loadDockets() {
       kind: data.kind || '', sector: data.sector || '', country: data.country || '', value: data.value || '',
       parties: data.parties || '', advisers: list(String(data.advisers || '').replace(/;/g, ',')), explainer: data.explainer || '',
       status: ['open', 'completed', 'withdrawn', 'blocked'].includes(status) ? status : 'open', closed: when(data.closed),
-      waitingText: data.waiting || '', gates, entries, next, note: (sec.note || []).join('\n').trim(),
+      waitingText: data.waiting || '', gates, entries, next, narrative: narrativeOf(body), sources: parseSources(data.sources), note: (sec.note || []).join('\n').trim(),
     };
     if (!d.no) warn(`${rel}: add a docket number, for example "number: 9 of 2026".`);
     const datedEntries = entries.filter((e) => dated(e.when));
@@ -416,7 +429,7 @@ function loadExplainers() {
       file, slug, url: `explainers/${slug}/`, title: data.title, date, iso: date.toISOString(),
       emoji: data.emoji || '', dek: data.dek || '', short: data.short || '', tags: list(data.tags),
       author: data.author || cfg.defaultAuthor || cfg.name, sources: parseSources(data.sources), image: data.image || '',
-      tone: data.tone || '', docketSlug: data.docket || '', body, minutes: Math.max(1, Math.round(words / 230)),
+      tone: data.tone || '', docketSlug: data.docket || '', points: Array.isArray(data.points) ? data.points : (data.points ? [data.points] : []), type: data.type || 'Analysis', body, minutes: Math.max(1, Math.round(words / 230)),
     });
   }
   return posts.sort((a, b) => b.date - a.date || a.title.localeCompare(b.title));
@@ -448,10 +461,39 @@ function tile(p, size, root, label = '') {
 }
 const tagList = (tags) => (tags.length ? `<p class="tags">${tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</p>` : '');
 
-function explainerRow(p, root) {
-  return `<article class="row">
-<a class="row-main" href="${root}${p.url}">${tile(p, 'sm', root)}<div class="row-text"><h3>${esc(p.title)}</h3>${p.dek ? `<p class="row-dek">${esc(p.dek)}</p>` : ''}</div></a>
-<div class="row-side"><p class="row-meta"><time datetime="${p.iso}">${fmtDay(p.date)}</time><span>${p.minutes} min read</span></p>${tagList(p.tags)}</div>
+const metaLine = (p) => `<p class="meta"><time datetime="${p.iso}">${fmtFull(p.date)}</time><span>${p.minutes} min read</span></p>`;
+function coverFor(p, root) {
+  const d = p.docket;
+  const top = d && d.no ? d.no.label : p.type;
+  const name = d ? d.title : (p.tags[0] || cfg.name);
+  const sub = d ? [d.kind, d.sector].filter(Boolean).join(', ') : p.tags.slice(1, 3).join(', ');
+  return `<a class="cover" href="${root}${p.url}" tabindex="-1" aria-hidden="true"><span class="cover-no">${esc(top)}</span><span class="cover-title">${esc(name)}</span>${sub ? `<span class="cover-sub">${esc(sub)}</span>` : ''}</a>`;
+}
+function featureCard(p, root) {
+  return `<article class="feature">${coverFor(p, root)}<div class="feature-body"><p class="card-type">${esc(p.type)}</p><h3><a href="${root}${p.url}">${esc(p.title)}</a></h3>${p.dek ? `<p class="feature-dek">${esc(p.dek)}</p>` : ''}${p.points && p.points.length ? `<ul class="feature-points">${p.points.slice(0, 2).map((x) => `<li>${inline(x, root)}</li>`).join('')}</ul>` : ''}${metaLine(p)}</div></article>`;
+}
+function analysisCard(p, root) {
+  return `<article class="card-a"><p class="card-type">${esc(p.type)}${p.docket && p.docket.no ? `<span>${esc(p.docket.no.label)}</span>` : ''}</p><h3><a href="${root}${p.url}">${esc(p.title)}</a></h3>${p.dek ? `<p class="card-dek">${esc(p.dek)}</p>` : ''}${metaLine(p)}</article>`;
+}
+function explainerRow(p, root) { return analysisCard(p, root); }
+const isLiveGate = (x) => x.docket.open && (STATUS[x.gate.status].waiting > 0 || x.gate.status === 'unknown');
+const firstSentences = (s, n = 2) => { const parts = String(s || '').match(/[^.!?]+[.!?]+(?=\s|$)/g) || [String(s || '')]; return parts.slice(0, n).join(' ').replace(/\s+/g, ' ').trim(); };
+function authCard(a, root, full = false) {
+  const live = a.gates.filter(isLiveGate).length;
+  const decided = a.gates.filter((x) => ['cleared', 'conditions', 'refused'].includes(x.gate.status)).length;
+  const counts = [live ? `${live} open` : '', decided ? `${decided} decided` : ''].filter(Boolean).join(', ');
+  return `<li class="auth-card"><a href="${root}regulators/${a.slug}/"><span class="auth-kind">${esc([a.kind, a.country].filter(Boolean).join(', '))}</span><strong>${esc(a.name)}</strong>${a.about ? `<span class="auth-about">${esc(full ? a.about : firstSentences(a.about, 2))}</span>` : ''}<span class="auth-count">${esc(counts)}</span></a></li>`;
+}
+function leadCard(d, root) {
+  const nx = d.next.filter((n) => upcoming(n.when)).sort((a, b) => whenSort(a.when) - whenSort(b.when))[0];
+  const facts = [['Waiting on', d.waiting ? d.waiting.text : 'Completion'], ...(nx ? [['Next', dated(nx.when) ? nx.when.label : 'Date not fixed']] : []), ...(dated(d.last) ? [['Last entry', d.last.label]] : [])];
+  return `<article class="lead-card" aria-labelledby="lead-h">
+<p class="lead-label">On the docket now</p>
+<h2 id="lead-h"><a href="${root}${d.url}">${d.no ? `<span class="lead-no">${esc(d.no.label)}</span>` : ''}${esc(d.title)}</a></h2>
+<p class="lead-sum">${esc(d.summary)}</p>
+${track(d, 'rail', root)}
+<dl class="lead-facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
+<a class="lead-more" href="${root}${d.url}">Read the docket</a>
 </article>`;
 }
 
@@ -468,28 +510,38 @@ function subscribe(root, variant) {
 <button class="btn btn-red" type="submit">Get alerts</button>
 </form>`;
   } else body = `<p class="sub-soon">Email alerts open shortly. Until then, follow new entries on the <a href="${root}wire.xml">Wire feed</a> or add the <a href="${root}cause-list/">cause list</a> to your calendar.</p>`;
-  const head = variant === 'page' ? '' : `<h2 class="sub-h" id="${id}">Docket alerts by email</h2><p class="sub-sub">Free, once a week: what moved, what comes next and one explainer.</p>`;
+  const head = variant === 'page' || variant === 'band' ? '' : `<h2 class="sub-h" id="${id}">Docket alerts by email</h2><p class="sub-sub">Free, once a week: what moved, what comes next and one explainer.</p>`;
   return `<section class="subscribe subscribe-${variant}"${head ? ` aria-labelledby="${id}"` : ''}>${head}${body}${live ? `<p class="sub-note">Unsubscribe from any email. <a href="${root}privacy/">How we use your address</a>.</p>` : ''}</section>`;
 }
 
 const authLink = (a, root, text) => (a && a.known && a.gates.length ? `<a href="${root}regulators/${a.slug}/">${esc(text || a.name)}</a>` : esc(text || (a ? a.name : '')));
 
+const STATUS_WORD = { cleared: 'cleared', conditions: 'cleared on conditions', pending: 'pending', hold: 'on hold by order', challenged: 'challenged', refused: 'refused', unknown: 'not reported' };
 function track(d, size, root) {
-  const gates = d.gates.map((g) => {
+  const rich = size === 'lg' || size === 'rail';
+  const dense = size === 'sm' && d.gates.length > 5;
+  const gates = d.gates.map((g, k) => {
     const st = STATUS[g.status];
-    const detail = size === 'lg'
+    const detail = rich
       ? `<span class="g-state">${esc(st.label)}</span>${dated(g.when) ? `<span class="g-date">${timeTag(g.when, g.when.short)}</span>` : ''}`
       : `<span class="sr-only">: ${esc(st.label)}${dated(g.when) ? `, ${esc(g.when.short)}` : ''}</span>`;
-    return `<li class="gate st-${g.status}"${size === 'lg' ? '' : ` title="${esc(`${g.auth ? g.auth.name : ''}: ${st.label}`)}"`}><span class="node" aria-hidden="true"></span><span class="g-name">${size === 'lg' ? authLink(g.auth, root, g.auth ? g.auth.short : '') : esc(g.auth ? g.auth.short : '')}</span>${detail}</li>`;
+    const name = rich ? authLink(g.auth, root, g.auth ? (size === 'rail' ? g.auth.name : g.auth.short) : '') : esc(g.auth ? g.auth.short : '');
+    return `<li class="gate st-${g.status}" style="--i:${k}"${rich ? '' : ` title="${esc(`${g.auth ? g.auth.name : ''}: ${st.label}`)}"`}><span class="node" aria-hidden="true"></span><span class="g-name">${name}</span>${detail}</li>`;
   });
   const done = d.status === 'completed';
   const endLabel = done ? 'Completed' : d.status === 'withdrawn' ? 'Withdrawn' : d.status === 'blocked' ? 'Blocked' : 'Completion';
   const endState = done ? (dated(d.closed) ? d.closed.short : 'Done') : d.open ? 'Not yet' : '';
-  gates.push(`<li class="gate st-end ${done ? 'is-done' : 'is-open'}"><span class="node" aria-hidden="true"></span><span class="g-name">${endLabel}</span>${size === 'lg' ? `<span class="g-state">${esc(endState)}</span>` : `<span class="sr-only">: ${esc(endState)}</span>`}</li>`);
-  return `<ol class="track track-${size}" style="--n:${gates.length}" aria-label="Approvals and challenges">${gates.join('')}</ol>`;
+  gates.push(`<li class="gate st-end ${done ? 'is-done' : 'is-open'}" style="--i:${d.gates.length}"><span class="node" aria-hidden="true"></span><span class="g-name">${endLabel}</span>${rich ? `<span class="g-state">${esc(endState)}</span>` : `<span class="sr-only">: ${esc(endState)}</span>`}</li>`);
+  let sum = '';
+  if (dense) {
+    const tally = {};
+    d.gates.forEach((g) => { tally[g.status] = (tally[g.status] || 0) + 1; });
+    sum = `<p class="track-sum">${d.gates.length} gates: ${Object.keys(STATUS_WORD).filter((s) => tally[s]).map((s) => `${tally[s]} ${STATUS_WORD[s]}`).join(', ')}</p>`;
+  }
+  return `<ol class="track track-${size}${dense ? ' track-dense' : ''}" style="--n:${gates.length}" aria-label="Approvals and challenges">${gates.join('')}</ol>${sum}`;
 }
 
-const TRACK_KEY = `<ul class="track-key" aria-label="Key to the gates">${['cleared', 'conditions', 'pending', 'hold', 'challenged'].map((s) => `<li class="st-${s}"><span class="node" aria-hidden="true"></span>${STATUS[s].label}</li>`).join('')}</ul>`;
+const TRACK_KEY = `<ul class="track-key" aria-label="Key to the gates">${['cleared', 'conditions', 'pending', 'unknown', 'hold', 'challenged'].map((s) => `<li class="st-${s}"><span class="node" aria-hidden="true"></span>${STATUS[s].label}</li>`).join('')}</ul>`;
 
 function boardRow(d, root) {
   const auths = [...new Set(d.gates.map((g) => g.auth && g.auth.slug).filter(Boolean))];
@@ -543,9 +595,10 @@ function calendarLinks(root) {
 
 /* ---------- page shell ---------- */
 
-const NAV = [['dockets', 'Dockets', 'dockets/'], ['cause', 'Cause list', 'cause-list/'], ['regulators', 'Regulators', 'regulators/'], ['explainers', 'Explainers', 'explainers/'], ['rates', 'Rates', 'rates/'], ['about', 'About', 'about/']];
+const NAV = [['dockets', 'Dockets', 'dockets/'], ['cause', 'Cause list', 'cause-list/'], ['regulators', 'Regulators', 'regulators/'], ['explainers', 'Analysis', 'explainers/'], ['rates', 'Rates', 'rates/'], ['about', 'About', 'about/']];
 const MARK = '<svg class="mark" viewBox="0 0 28 24" aria-hidden="true" focusable="false"><path d="M1 3.6C1 2.7 1.7 2 2.6 2h7.2c.4 0 .8.2 1.1.5L13.4 5h12c.9 0 1.6.7 1.6 1.6v13.8c0 .9-.7 1.6-1.6 1.6H2.6C1.7 22 1 21.3 1 20.4z" fill="#B3261E"/><path d="M6 12.5h16M6 16.5h10" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>';
 
+let FOOT_AUTH = [];
 function shell(o) {
   const root = o.root;
   const title = o.title ? `${o.title} | ${cfg.name}` : `${cfg.name}: ${cfg.tagline}`;
@@ -565,23 +618,25 @@ ${canon ? `<link rel="canonical" href="${esc(canon)}">\n` : ''}${o.noindex ? '<m
 <meta property="og:title" content="${esc(o.title || cfg.name)}">
 <meta property="og:description" content="${esc(desc)}">
 ${canon ? `<meta property="og:url" content="${esc(canon)}">\n` : ''}${img ? `<meta property="og:image" content="${esc(img)}">\n<meta property="og:image:width" content="1200">\n<meta property="og:image:height" content="630">\n` : ''}<meta name="twitter:card" content="summary_large_image">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#0e2233">
 <meta name="color-scheme" content="light">
 <link rel="icon" href="${root}assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="${root}assets/apple-touch-icon.png">
 <link rel="alternate" type="application/rss+xml" title="${esc(cfg.name)}: new docket entries" href="${root}wire.xml">
-<link rel="alternate" type="application/rss+xml" title="${esc(cfg.name)}: explainers" href="${root}rss.xml">
+<link rel="alternate" type="application/rss+xml" title="${esc(cfg.name)}: analysis" href="${root}rss.xml">
+<link rel="preload" href="${root}assets/fonts/Newsreader.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="${root}assets/fonts/SchibstedGrotesk.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${root}assets/style.css?v=${BUILD_ID}">
 ${o.head || ''}</head>
-<body>
+<body${o.pageClass ? ` class="${o.pageClass}"` : ''}>
 <a class="skip" href="#main">Skip to content</a>
 <header class="masthead">
-<div class="wrap mast-in">
+<div class="topline"><div class="wrap topline-in"><p>An independent record of East Africa's deals and disputes before regulators, tribunals and courts</p><p class="topline-r"><span>Updated ${esc(fmtFull(NOW))}</span><a href="${root}cause-list/#calendar">Calendar</a><a href="${root}wire.xml">Wire feed</a></p></div></div>
+<div class="mast"><div class="wrap mast-in">
 <a class="brand" href="${root}">${MARK}<span>${esc(cfg.name)}</span></a>
 <nav class="nav" aria-label="Sections">${NAV.map(([k, label, href]) => `<a href="${root}${href}"${o.active === k ? ' aria-current="page"' : ''}>${label}</a>`).join('')}</nav>
 <a class="btn btn-red mast-cta" href="${root}subscribe/">Get alerts</a>
-</div>
+</div></div>
 </header>
 <main id="main">
 ${o.body}
@@ -589,11 +644,12 @@ ${o.body}
 <footer class="foot">
 <div class="wrap foot-in">
 <div class="foot-about">
-<p class="foot-name">${esc(cfg.name)}</p>
+<a class="brand brand-foot" href="${root}">${MARK}<span>${esc(cfg.name)}</span></a>
 <p>${esc(cfg.description)}</p>
-<p class="foot-small">An independent publication. Nothing here is legal advice.</p>
+<p class="foot-small">An independent publication. It is not written for or on behalf of any law firm, client or party to the matters it covers, and nothing on this site is legal, financial or investment advice.</p>
 </div>
-<nav class="foot-col" aria-label="The docket"><p class="foot-h">The docket</p><ul><li><a href="${root}dockets/">All dockets</a></li><li><a href="${root}cause-list/">Cause list</a></li><li><a href="${root}regulators/">Regulators and courts</a></li><li><a href="${root}explainers/">Explainers</a></li><li><a href="${root}rates/">Rates</a></li></ul></nav>
+<nav class="foot-col" aria-label="The docket"><p class="foot-h">The docket</p><ul><li><a href="${root}dockets/">All dockets</a></li><li><a href="${root}cause-list/">Cause list</a></li><li><a href="${root}regulators/">Regulators and courts</a></li><li><a href="${root}explainers/">Analysis</a></li><li><a href="${root}rates/">Rates</a></li></ul></nav>
+${FOOT_AUTH.length ? `<nav class="foot-col" aria-label="Regulators and courts"><p class="foot-h">Regulators and courts</p><ul>${FOOT_AUTH.map((a) => `<li><a href="${root}regulators/${a.slug}/">${esc(a.name)}</a></li>`).join('')}</ul></nav>` : ''}
 <div class="foot-col"><p class="foot-h">Follow</p><ul><li><a href="${root}subscribe/">Email alerts</a></li><li><a href="${root}cause-list/#calendar">Cause list calendar</a></li><li><a href="${root}wire.xml">Wire feed</a></li>${socialLinks}<li><a href="${root}about/">About</a></li><li><a href="${root}privacy/">Privacy</a></li></ul></div>
 </div>
 <div class="wrap foot-base"><span>&copy; ${NOW.getUTCFullYear()} ${esc(cfg.name)}</span><span>Every entry links to its source.</span></div>
@@ -615,7 +671,7 @@ function write(rel, html, { index = true, lastmod = '' } = {}) {
   if (index) sitemap.push({ loc: rel, lastmod });
 }
 const rootFor = (rel) => '../'.repeat(rel.split('/').filter(Boolean).length) || './';
-const pageHead = (h1, lede = '', extra = '', width = 'wrap') => `<section class="${width} page-head"><h1>${h1}</h1>${lede ? `<p>${lede}</p>` : ''}${extra}</section>`;
+const pageHead = (h1, lede = '', extra = '', width = 'wrap', kicker = '') => `<section class="page-head"><div class="${width}">${kicker ? `<p class="ph-kicker">${kicker}</p>` : ''}<h1>${h1}</h1>${lede ? `<p class="ph-lede">${lede}</p>` : ''}${extra}</div></section>`;
 const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 function build() {
@@ -651,26 +707,49 @@ function build() {
   const waitingCount = open.filter((d) => d.gates.some((g) => STATUS[g.status].waiting)).length;
   const lastEntry = allEntries[0] ? allEntries[0].e.when : null;
   const authorities = [...new Set([...AUTH.values()])].filter((a) => a.known && a.gates.length).sort((a, b) => b.gates.length - a.gates.length || a.name.localeCompare(b.name));
+  FOOT_AUTH = authorities.slice(0, 6);
 
   /* home */
   {
     const root = './';
-    const causeCard = `<aside class="cl-card" aria-labelledby="cl-h"><h2 class="cl-tab" id="cl-h">Cause list</h2><div class="cl-body">${cause.length ? `<ol class="cause cause-compact">${cause.slice(0, 6).map((it) => causeItem(it, root, true)).join('')}</ol>` : '<p class="empty">No dates on the list yet.</p>'}<p class="cl-foot"><a href="${root}cause-list/">Full cause list</a><a href="${root}cause-list/#calendar">Add it to your calendar</a></p></div></aside>`;
+    const lead = (cfg.leadDocket && open.find((d) => d.slug === cfg.leadDocket)) || open.find((d) => d.gates.some((g) => STATUS[g.status].waiting >= 2)) || open[0];
     let body = `<section class="hero"><div class="wrap hero-in">
 <div class="hero-copy">
+<p class="hero-date">The docket on ${esc(fmtLong(NOW))}</p>
 <h1>${esc(cfg.tagline)}.</h1>
 <p class="lede">${esc(cfg.lede || cfg.description)}</p>
-<p class="hero-count">${count(open.length, 'open matter', 'open matters')}, ${waitingCount} waiting on a regulator, court or tribunal.${lastEntry ? ` Last entry ${esc(lastEntry.short)}.` : ''}</p>
-${subscribe(root, 'hero')}
+<p class="hero-count">${count(open.length, 'open matter', 'open matters')}, ${waitingCount} waiting on a regulator, court or tribunal.${lastEntry ? ` Last entry ${esc(lastEntry.label)}.` : ''}</p>
+<p class="hero-cta"><a class="btn btn-red" href="${root}dockets/">Open the dockets</a><a class="btn btn-ghost" href="${root}cause-list/">See what is coming up</a></p>
 </div>
-${causeCard}
+${lead ? leadCard(lead, root) : ''}
 </div></section>`;
-    body += `<section class="wrap block"><header class="block-h"><h2>Open matters</h2><a href="${root}dockets/">All dockets</a></header>${TRACK_KEY}${open.length ? `<div class="board">${open.map((d) => boardRow(d, root)).join('\n')}</div>` : '<p class="empty">The first docket opens here.</p>'}</section>`;
-    body += `<div class="wrap block split"><section><header class="block-h"><h2>Latest entries</h2><a href="${root}wire.xml">Wire feed</a></header>${allEntries.length ? wireList(allEntries.slice(0, 8), root) : '<p class="empty">No entries yet.</p>'}</section>`;
-    body += `<section><header class="block-h"><h2>Rates</h2><a href="${root}rates/">All rates</a></header>${figs.length ? `<dl class="rates">${figs.map((f) => `<div><dt>${esc(f.label)}</dt><dd><strong>${esc(f.value)}</strong><span>${esc(f.asAt)}</span></dd></div>`).join('')}</dl>` : '<p class="empty">No rates yet.</p>'}</section></div>`;
-    if (explainers.length) body += `<section class="wrap block"><header class="block-h"><h2>Explainers</h2><a href="${root}explainers/">All explainers</a></header><div class="rows">${explainers.slice(0, 4).map((p) => explainerRow(p, root)).join('\n')}</div></section>`;
-    if (closed.length) body += `<section class="wrap block"><header class="block-h"><h2>Closed</h2><a href="${root}dockets/?status=closed">All closed dockets</a></header><div class="board">${closed.slice(0, 4).map((d) => boardRow(d, root)).join('\n')}</div></section>`;
-    write('', shell({ root, path: '', body }), { lastmod: lastEntry ? isoDay(lastEntry.start) : '' });
+    if (explainers.length) {
+      body += `<section class="block"><div class="wrap">
+<header class="block-h"><div><h2>Analysis</h2><p>Long reads on single matters: what happened, who had to say yes, and what it means for the people who structure, finance and advise on deals in the region.</p></div><a class="block-link" href="${root}explainers/">All analysis</a></header>
+<div class="analysis-grid">${featureCard(explainers[0], root)}${explainers.length > 1 ? `<div class="analysis-side">${explainers.slice(1, 4).map((p) => analysisCard(p, root)).join('')}</div>` : ''}</div>
+</div></section>`;
+    }
+    body += `<section class="block block-mist"><div class="wrap">
+<header class="block-h"><div><h2>Where every open matter stands</h2><p>Each row is a live docket. Its track shows the approvals and challenges the matter has to pass, in order, ending in completion.</p></div><a class="block-link" href="${root}dockets/">All dockets</a></header>
+${TRACK_KEY}${open.length ? `<div class="board">${open.map((d) => boardRow(d, root)).join('\n')}</div>` : '<p class="empty">The first docket opens here.</p>'}
+</div></section>`;
+    if (authorities.length) {
+      body += `<section class="block"><div class="wrap">
+<header class="block-h"><div><h2>Before the regulators and courts</h2><p>The authorities whose decisions decide whether a deal closes, and the matters now before each of them.</p></div><a class="block-link" href="${root}regulators/">All regulators and courts</a></header>
+<ul class="auth-cards">${authorities.slice(0, 6).map((a) => authCard(a, root)).join('')}</ul>
+</div></section>`;
+    }
+    body += `<section class="block block-ink"><div class="wrap cause-split">
+<div class="cause-intro"><h2>Coming up</h2><p>The dates ahead on open dockets, and the deadlines in the rules that shape deals. Subscribe once and every date arrives in your calendar, updated whenever the list changes.</p><p class="cal-btns">${calendarLinks(root)}</p><p><a class="block-link" href="${root}cause-list/">The full cause list</a></p></div>
+${cause.length ? `<ol class="cause cause-home">${cause.slice(0, 6).map((it) => causeItem(it, root, true)).join('')}</ol>` : '<p class="empty">No dates on the list yet.</p>'}
+</div></section>`;
+    body += `<div class="block"><div class="wrap split">
+<section><header class="block-h"><div><h2>Latest on the record</h2><p>The newest entries across every docket, each with its source.</p></div><a class="block-link" href="${root}wire.xml">Wire feed</a></header>${allEntries.length ? wireList(allEntries.slice(0, 8), root) : '<p class="empty">No entries yet.</p>'}</section>
+<section><header class="block-h"><div><h2>Rates</h2><p>The figures that price deals in Kenya.</p></div><a class="block-link" href="${root}rates/">All rates</a></header>${figs.length ? `<dl class="rates">${figs.map((f) => `<div><dt>${esc(f.label)}</dt><dd><strong>${esc(f.value)}</strong><span>${esc(f.asAt)}</span></dd></div>`).join('')}</dl>` : '<p class="empty">No rates yet.</p>'}</section>
+</div></div>`;
+    if (closed.length) body += `<section class="block"><div class="wrap"><header class="block-h"><div><h2>Closed</h2><p>Dockets whose deals have completed, been withdrawn or been blocked. Their files stay on the record.</p></div><a class="block-link" href="${root}dockets/?status=closed">All closed dockets</a></header><div class="board">${closed.slice(0, 4).map((d) => boardRow(d, root)).join('\n')}</div></div></section>`;
+    body += `<section class="sub-band"><div class="wrap sub-band-in"><div class="sub-band-copy"><h2>The week on the docket</h2><p>One email a week with what moved on every docket, the dates coming up and one long read. Free, and you can leave at any time.</p></div>${subscribe(root, 'band')}</div></section>`;
+    write('', shell({ root, path: '', body, pageClass: 'is-home' }), { lastmod: lastEntry ? isoDay(lastEntry.start) : '' });
   }
 
   /* all dockets */
@@ -687,13 +766,13 @@ ${causeCard}
   for (const d of dockets) {
     const rel = d.url;
     const root = rootFor(rel);
+    const statusText = d.open ? 'Open' : d.status === 'completed' ? `Completed${dated(d.closed) ? ` ${d.closed.label}` : ''}` : d.status === 'withdrawn' ? 'Withdrawn' : 'Blocked';
     const facts = [
-      ['Status', d.open ? 'Open' : d.status === 'completed' ? `Completed${dated(d.closed) ? ` ${d.closed.label}` : ''}` : d.status === 'withdrawn' ? 'Withdrawn' : 'Blocked'],
-      ...(d.open ? [['Waiting on', d.waiting.auth ? authLink(d.waiting.auth, root) : esc(d.waiting.text), true]] : []),
-      ['Value', d.value || 'Not disclosed'],
-      ['Kind', [d.kind, d.sector].filter(Boolean).join(', ')],
-      ['First entry', dated(d.opened) ? d.opened.label : 'None yet'],
-      ['Last entry', dated(d.last) ? d.last.label : 'None yet'],
+      ['Status', esc(statusText)],
+      ...(d.open ? [['Waiting on', d.waiting.auth ? authLink(d.waiting.auth, root) : esc(d.waiting.text)]] : []),
+      ['Value', esc(d.value || 'Not disclosed')],
+      ['First entry', esc(dated(d.opened) ? d.opened.label : 'None yet')],
+      ['Last entry', esc(dated(d.last) ? d.last.label : 'None yet')],
     ];
     const gatesHtml = d.gates.length ? `<ol class="gates">${d.gates.map((g) => `<li class="gate-row st-${g.status}"><div class="gr-head"><span class="node" aria-hidden="true"></span><h3>${authLink(g.auth, root)}</h3><span class="badge st-${g.status}">${esc(STATUS[g.status].label)}</span></div><p class="gr-what">${esc(g.what)}${dated(g.when) ? `<span>${timeTag(g.when)}</span>` : ''}</p>${g.note ? `<p class="gr-note">${inline(g.note, root)}</p>` : ''}${srcLine(g.sources)}</li>`).join('')}</ol>` : '<p class="empty">No approvals or challenges on the record yet.</p>';
     const sheet = d.entries.length ? `<ol class="sheet">${d.entries.map((e) => `<li id="e-${e.n}"><span class="sh-no">${e.n}</span><span class="sh-date">${dated(e.when) ? timeTag(e.when, e.when.short) : esc(e.when.label)}</span><div class="sh-body"><p>${inline(e.text, root)}</p>${srcLine(e.sources)}</div></li>`).join('')}</ol>` : '<p class="empty">No entries yet.</p>';
@@ -702,36 +781,44 @@ ${causeCard}
     const ex = d.explainerPost;
     const cite = `Docket Wire, '${d.title}'${d.no ? `, ${d.no.label}` : ''}${dated(d.last) ? ` (last entry ${d.last.label})` : ''}`;
     const related = dockets.filter((x) => x !== d && x.gates.some((g) => d.gates.some((h) => h.auth && g.auth && h.auth.slug === g.auth.slug))).slice(0, 4);
+    const parties = String(d.parties || '').split(';').map((x) => x.trim()).filter(Boolean);
+    const story = d.narrative.map((s, k) => `<section class="story${k === 0 ? ' story-first' : ''}" id="${esc(s.slug)}" aria-labelledby="${esc(s.slug)}-h"><h2 id="${esc(s.slug)}-h">${esc(s.title)}</h2><div class="prose">${md(s.text, root)}</div></section>`).join('\n');
+    const storySrc = d.sources.length ? `<section class="story-sources" aria-labelledby="ss-h"><h2 id="ss-h">Sources for this story</h2><ol>${d.sources.map((s) => `<li>${srcLink(s)}</li>`).join('')}</ol></section>` : '';
+    const glance = [['Kind', d.kind], ['Sector', d.sector], ['Where', d.country], ['Value', d.value || 'Not disclosed']].filter(([, v]) => v);
     const body = `<article class="docket">
-<header class="wrap docket-head">
-<div class="file">
-${d.no ? `<p class="file-tab">${esc(d.no.label)}</p>` : ''}
-<div class="file-body">
+<header class="docket-hero"><div class="wrap">
+<nav class="crumbs" aria-label="Breadcrumb"><a href="${root}dockets/">Dockets</a>${d.no ? `<span>${esc(d.no.label)}</span>` : ''}</nav>
+<div class="dh-grid">
+<div class="dh-copy">
+<p class="dh-kind">${esc([d.kind, d.sector].filter(Boolean).join(', '))}</p>
 <h1>${esc(d.title)}</h1>
-${d.summary ? `<p class="docket-sum">${esc(d.summary)}</p>` : ''}
-${d.parties ? `<p class="docket-parties"><span>Parties</span>${esc(d.parties)}</p>` : ''}
-<dl class="facts">${facts.map(([k, v, raw]) => `<div><dt>${k}</dt><dd>${raw ? v : esc(v)}</dd></div>`).join('')}</dl>
-${track(d, 'lg', root)}
+${d.summary ? `<p class="dh-sum">${esc(d.summary)}</p>` : ''}
 </div>
+<dl class="dh-facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>
 </div>
-</header>
+<div class="dh-track">${track(d, 'lg', root)}</div>
+<div class="dh-rail">${track(d, 'rail', root)}</div>
+</div></header>
 <div class="wrap docket-cols">
 <div class="docket-main">
-<section aria-labelledby="gates-h"><h2 id="gates-h">Gates</h2><p class="sec-note">The approvals and challenges on the record, with the authority's decision as reported.</p>${gatesHtml}</section>
+${story}
+${storySrc}
+<section class="dsec" aria-labelledby="gates-h"><h2 id="gates-h">Gates</h2><p class="sec-note">The approvals and challenges on the record, with each authority's decision as reported.</p>${TRACK_KEY}${gatesHtml}</section>
 ${d.note ? `<section class="prose docket-note">${md(d.note, root)}</section>` : ''}
-<section aria-labelledby="sheet-h"><h2 id="sheet-h">Docket sheet</h2><p class="sec-note">Every step in date order, each with its source.</p>${sheet}</section>
+<section class="dsec" aria-labelledby="sheet-h"><h2 id="sheet-h">Docket sheet</h2><p class="sec-note">Every step in date order, each with its source.</p>${sheet}</section>
 </div>
 <aside class="docket-side">
-<section aria-labelledby="next-h"><h2 id="next-h">Next</h2>${nextHtml}</section>
-${ex ? `<section class="side-ex" aria-labelledby="ex-h"><h2 id="ex-h">The explainer</h2><a class="ex-card" href="${root}${ex.url}">${tile(ex, 'sm', root)}<span><strong>${esc(ex.title)}</strong><span>${ex.minutes} min read</span></span></a></section>` : ''}
-<section aria-labelledby="cite-h"><h2 id="cite-h">Cite this docket</h2><p class="cite" data-cite>${esc(cite)}${absUrl(d.url) ? `, <span data-cite-url>${esc(absUrl(d.url))}</span>` : ''}</p><button class="share-btn" type="button" data-copy-cite hidden>Copy citation</button></section>
-<section class="side-follow" aria-labelledby="follow-h"><h2 id="follow-h">Follow this docket</h2><p>New entries go out in the weekly email and on the <a href="${root}wire.xml">Wire feed</a>. Its dates are on the <a href="${root}cause-list/">cause list</a>.</p></section>
+<section class="side-card" aria-labelledby="glance-h"><h2 id="glance-h">At a glance</h2><dl class="glance">${glance.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}${parties.length ? `<div><dt>Parties</dt><dd><ul class="parties">${parties.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></dd></div>` : ''}</dl></section>
+<section class="side-card" aria-labelledby="next-h"><h2 id="next-h">Next</h2>${nextHtml}</section>
+${ex ? `<section class="side-card side-ex" aria-labelledby="ex-h"><h2 id="ex-h">The analysis</h2><a class="ex-card" href="${root}${ex.url}"><strong>${esc(ex.title)}</strong><span>${ex.minutes} min read</span></a></section>` : ''}
+<section class="side-card" aria-labelledby="cite-h"><h2 id="cite-h">Cite this docket</h2><p class="cite" data-cite>${esc(cite)}${absUrl(d.url) ? `, <span data-cite-url>${esc(absUrl(d.url))}</span>` : ''}</p><button class="share-btn" type="button" data-copy-cite hidden>Copy citation</button></section>
+<section class="side-card side-follow" aria-labelledby="follow-h"><h2 id="follow-h">Follow this docket</h2><p>New entries go out in the weekly email and on the <a href="${root}wire.xml">Wire feed</a>. Its dates are on the <a href="${root}cause-list/">cause list</a>.</p></section>
 </aside>
 </div>
-${related.length ? `<section class="wrap block"><header class="block-h"><h2>Before the same regulators and courts</h2></header><div class="board">${related.map((x) => boardRow(x, root)).join('\n')}</div></section>` : ''}
+${related.length ? `<section class="block block-mist"><div class="wrap"><header class="block-h"><div><h2>Before the same regulators and courts</h2><p>Other dockets that share at least one gate with this one.</p></div></header><div class="board">${related.map((x) => boardRow(x, root)).join('\n')}</div></div></section>` : ''}
 </article>`;
-    const desc = `${d.no ? `${d.no.label}. ` : ''}${d.summary || d.title}. Approvals, challenges and every step on the record, with sources.`;
-    write(rel, shell({ root, path: rel, title: d.title, description: desc, active: 'dockets', body }), { lastmod: dated(d.last) ? isoDay(d.last.start) : '' });
+    const desc = `${d.no ? `${d.no.label}. ` : ''}${d.summary || d.title}. The story so far, every approval and challenge, and each step on the record with its source.`;
+    write(rel, shell({ root, path: rel, title: d.title, description: desc, active: 'dockets', body, pageClass: 'is-docket' }), { lastmod: dated(d.last) ? isoDay(d.last.start) : '' });
   }
 
   /* cause list */
@@ -756,20 +843,16 @@ ${related.length ? `<section class="wrap block"><header class="block-h"><h2>Befo
   {
     const rel = 'regulators/';
     const root = rootFor(rel);
-    const body = `${pageHead('Regulators and courts', 'The authorities whose yes, no or order decides whether a deal closes. Each page lists the matters before it and what it has decided.')}<section class="wrap"><ul class="auth-grid">${authorities.map((a) => {
-      const live = a.gates.filter((x) => x.docket.open && STATUS[x.gate.status].waiting).length;
-      const decided = a.gates.length - live;
-      return `<li><a href="${root}regulators/${a.slug}/"><strong>${esc(a.name)}</strong><span>${esc([a.kind, a.country].filter(Boolean).join(', '))}</span><span class="auth-count">${[live ? `${live} open` : '', decided ? `${decided} decided` : ''].filter(Boolean).join(', ')}</span></a></li>`;
-    }).join('')}</ul></section>`;
+    const body = `${pageHead('Regulators and courts', 'The authorities whose yes, no or order decides whether a deal closes: competition and capital markets regulators, central banks and finance ministries, the PPP Committee, and the tribunals and courts that hear challenges to all of them. Each page lists the matters before it and what it has decided.')}<section class="block"><div class="wrap"><ul class="auth-cards auth-cards-all">${authorities.map((a) => authCard(a, root)).join('')}</ul></div></section>`;
     write(rel, shell({ root, path: rel, title: 'Regulators and courts', active: 'regulators', body }));
     for (const a of authorities) {
       const r2 = `regulators/${a.slug}/`;
       const root2 = rootFor(r2);
       const rowsFor = (list) => `<ol class="gates">${list.map(({ docket: d, gate: g }) => `<li class="gate-row st-${g.status}"><div class="gr-head"><span class="node" aria-hidden="true"></span><h3><a href="${root2}${d.url}">${esc(d.title)}</a></h3><span class="badge st-${g.status}">${esc(STATUS[g.status].label)}</span></div><p class="gr-what">${esc(g.what)}${dated(g.when) ? `<span>${timeTag(g.when)}</span>` : ''}</p>${g.note ? `<p class="gr-note">${inline(g.note, root2)}</p>` : ''}${srcLine(g.sources)}</li>`).join('')}</ol>`;
-      const waiting = a.gates.filter((x) => x.docket.open && STATUS[x.gate.status].waiting);
+      const waiting = a.gates.filter(isLiveGate);
       const rest = a.gates.filter((x) => !waiting.includes(x)).sort((x, y) => whenSort(y.gate.when) - whenSort(x.gate.when));
-      const about = [esc(a.about), a.website ? `<a href="${esc(a.website)}" rel="noopener">Official website</a>` : ''].filter(Boolean).join(' ');
-      const body2 = `${pageHead(esc(a.name), about, '')}<section class="wrap auth-page">${waiting.length ? `<section><h2>Open</h2><p class="sec-note">Pending before the ${esc(a.short)}, held by an order or under challenge.</p>${rowsFor(waiting)}</section>` : ''}${rest.length ? `<section><h2>Decided</h2>${rowsFor(rest)}</section>` : ''}</section>`;
+      const extra = a.website ? `<p class="ph-links"><a class="btn btn-ghost-dark" href="${esc(a.website)}" rel="noopener">Official website</a></p>` : '';
+      const body2 = `${pageHead(esc(a.name), esc(a.about), extra, 'wrap', esc([a.kind, a.country].filter(Boolean).join(', ')))}<section class="block"><div class="wrap auth-page">${waiting.length ? `<section class="dsec"><h2>Open before the ${esc(a.short)}</h2><p class="sec-note">Pending, not yet reported, held by an order or under challenge.</p>${rowsFor(waiting)}</section>` : ''}${rest.length ? `<section class="dsec"><h2>Decided</h2><p class="sec-note">Decisions on the record, newest first.</p>${rowsFor(rest)}</section>` : ''}</div></section>`;
       write(r2, shell({ root: root2, path: r2, title: a.name, active: 'regulators', description: `Matters before the ${a.name} on Docket Wire: what is waiting and what it has decided.`, body: body2 }));
     }
   }
@@ -778,8 +861,9 @@ ${related.length ? `<section class="wrap block"><header class="block-h"><h2>Befo
   {
     const rel = 'explainers/';
     const root = rootFor(rel);
-    const body = `${pageHead('Explainers', 'Longer reads on single matters: what happened, who had to say yes, and what the lawyers did. Each one sits on its docket.')}<section class="wrap">${explainers.length ? `<div class="rows">${explainers.map((p) => explainerRow(p, root)).join('\n')}</div>` : '<p class="empty">The first explainer lands here.</p>'}</section>`;
-    write(rel, shell({ root, path: rel, title: 'Explainers', active: 'explainers', body }));
+    const grid = explainers.length ? `<div class="analysis-grid">${featureCard(explainers[0], root)}${explainers.length > 1 ? `<div class="analysis-side">${explainers.slice(1, 3).map((p) => analysisCard(p, root)).join('')}</div>` : ''}</div>${explainers.length > 3 ? `<div class="cards">${explainers.slice(3).map((p) => analysisCard(p, root)).join('')}</div>` : ''}` : '<p class="empty">The first analysis lands here.</p>';
+    const body = `${pageHead('Analysis', 'Long reads on single matters: what happened, who had to say yes, and what it means for the people who structure, finance and advise on deals in East Africa. Each one sits on its docket.')}<section class="block"><div class="wrap">${grid}</div></section>`;
+    write(rel, shell({ root, path: rel, title: 'Analysis', active: 'explainers', body }));
   }
   explainers.forEach((p, k) => {
     const root = rootFor(p.url);
@@ -790,28 +874,35 @@ ${related.length ? `<section class="wrap block"><header class="block-h"><h2>Befo
       datePublished: p.iso, author: { '@type': p.author === cfg.name ? 'Organization' : 'Person', name: p.author },
       publisher: { '@type': 'Organization', name: cfg.name }, ...(canon ? { url: canon, mainEntityOfPage: canon } : {}),
     }).replace(/</g, '\\u003c');
-    const onDocket = p.docket ? `<a class="on-docket" href="${root}${p.docket.url}"><span>On the docket</span><strong>${p.docket.no ? `${esc(p.docket.no.label)}: ` : ''}${esc(p.docket.title)}</strong><span>${p.docket.open ? `Waiting on ${esc(p.docket.waiting.text)}` : 'Closed'}</span></a>` : '';
+    const toc = [...p.html.matchAll(/<h2 id="([^"]+)">([\s\S]*?)<\/h2>/g)].map((m) => ({ id: m[1], text: unesc(m[2].replace(/<[^>]+>/g, '')) }));
+    const onDocket = p.docket ? `<a class="on-docket" href="${root}${p.docket.url}"><span class="od-label">On the docket</span><strong>${p.docket.no ? `${esc(p.docket.no.label)}: ` : ''}${esc(p.docket.title)}</strong><span class="od-state">${p.docket.open ? `Waiting on ${esc(p.docket.waiting.text)}` : 'Closed'}</span></a>` : '';
+    const keyBox = p.points.length ? `<section class="points" aria-labelledby="pts-h"><h2 id="pts-h">Key points</h2><ul>${p.points.map((x) => `<li>${inline(x, root)}</li>`).join('')}</ul></section>` : (p.short ? `<aside class="points" aria-labelledby="short-h"><h2 id="short-h">The short version</h2><p>${inline(p.short, root)}</p></aside>` : '');
     const body = `<article class="post">
-<header class="narrow post-head">
-${tile(p, 'md', root)}
-${tagList(p.tags)}
+<header class="post-hero"><div class="wrap post-hero-in">
+<nav class="crumbs" aria-label="Breadcrumb"><a href="${root}explainers/">Analysis</a>${p.docket && p.docket.no ? `<a href="${root}${p.docket.url}">${esc(p.docket.no.label)}</a>` : ''}</nav>
 <h1>${esc(p.title)}</h1>
 ${p.dek ? `<p class="post-dek">${esc(p.dek)}</p>` : ''}
-<p class="post-meta"><time datetime="${p.iso}">${fmtFull(p.date)}</time><span>By ${esc(p.author)}</span><span>${p.minutes} min read</span></p>
-</header>
-<div class="narrow">
+<p class="post-meta"><span>By ${esc(p.author)}</span><time datetime="${p.iso}">${fmtFull(p.date)}</time><span>${p.minutes} min read</span></p>
+${tagList(p.tags)}
+</div></header>
+<div class="wrap post-grid">
+<aside class="post-aside">
+${toc.length > 2 ? `<nav class="toc" aria-labelledby="toc-h"><p class="toc-h" id="toc-h">In this analysis</p><ol>${toc.map((t) => `<li><a href="#${esc(t.id)}">${esc(t.text)}</a></li>`).join('')}</ol></nav>` : ''}
 ${onDocket}
-${p.short ? `<aside class="short" aria-labelledby="short-h"><h2 id="short-h">The short version</h2><p>${inline(p.short, root)}</p></aside>` : ''}
-<div class="prose">
+</aside>
+<div class="post-main">
+${keyBox}
+<div class="prose post-prose">
 ${p.html}
 </div>
 ${p.sources.length ? `<section class="sources" aria-labelledby="src-h"><h2 id="src-h">Sources</h2><ol>${p.sources.map((s) => `<li>${srcLink(s)}</li>`).join('')}</ol></section>` : ''}
 ${shareBar(p)}
 ${subscribe(root, 'inline')}
-${newer || older ? `<nav class="post-nav" aria-label="More explainers">${older ? `<a class="pn pn-older" href="${root}${older.url}"><span>Previous</span>${esc(older.title)}</a>` : '<span></span>'}${newer ? `<a class="pn pn-newer" href="${root}${newer.url}"><span>Next</span>${esc(newer.title)}</a>` : '<span></span>'}</nav>` : ''}
+${newer || older ? `<nav class="post-nav" aria-label="More analysis">${older ? `<a class="pn pn-older" href="${root}${older.url}"><span>Previous</span>${esc(older.title)}</a>` : '<span></span>'}${newer ? `<a class="pn pn-newer" href="${root}${newer.url}"><span>Next</span>${esc(newer.title)}</a>` : '<span></span>'}</nav>` : ''}
+</div>
 </div>
 </article>`;
-    write(p.url, shell({ root, path: p.url, title: p.title, description: p.dek || p.short, type: 'article', image: p.image ? resolveUrl(p.image, '') : '', active: 'explainers', head: `<meta property="article:published_time" content="${p.iso}">\n<script type="application/ld+json">${ld}</script>\n`, body }), { lastmod: isoDay(p.date) });
+    write(p.url, shell({ root, path: p.url, title: p.title, description: p.dek || p.short, type: 'article', image: p.image ? resolveUrl(p.image, '') : '', active: 'explainers', head: `<meta property="article:published_time" content="${p.iso}">\n<script type="application/ld+json">${ld}</script>\n`, body, pageClass: 'is-post' }), { lastmod: isoDay(p.date) });
   });
 
   /* rates */

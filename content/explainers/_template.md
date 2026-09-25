@@ -1,31 +1,40 @@
 ---
-title: Why [something happened], and what it means for [who]
+title: A headline that states the question the piece answers
 date: 2026-10-05 08:00
-emoji: ⚖️
-dek: One sentence on why this matters.
+type: Analysis
+dek: One or two sentences on why this matters now.
 tags: M&A, Banking
 docket: file-name-of-the-docket
 author: Docket Wire
 short: Three sentences a reader could stop after.
+points:
+  - The first key point, as a full sentence with its date or figure.
+  - The second key point.
+  - The third key point.
+  - The fourth key point.
 sources:
   - Publication, date | https://example.com/article
 ---
 
-## What's going on here?
+## The transaction
 
-Two or three short paragraphs on what happened, with dates and figures.
+What happened, with dates, figures and the parties, in connected paragraphs.
 
-## Why did they do it this way?
+## Why the rules are engaged
 
 > ### What is a [term]?
-> A plain-English definition in two sentences. This renders as a boxed definition.
+> A plain-English definition in two or three sentences, naming the instrument that sets the rule. This renders as a boxed definition.
 
-The reasoning, in plain English.
+The legal reasoning, in plain English.
 
-## Who has to say yes?
+## The case on each side
 
-- Each regulator, court or counterparty whose consent is needed, and why.
+The strongest argument each way, and how the other side answers it.
 
-## What would the lawyers be doing?
+## What it means
 
-What the corporate, regulatory and disputes teams would be doing, and the junior lawyer's part in it.
+Firstly, the first lesson for people doing deals. Secondly, the second. Finally, the last.
+
+## What happens next
+
+The next dates and what to watch.

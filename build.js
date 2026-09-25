@@ -550,10 +550,11 @@ function boardRow(d, root) {
   const side = d.open
     ? `<p><span class="br-k">Waiting on</span><strong>${esc(d.waiting.text)}</strong></p>${nx ? `<p><span class="br-k">Next date</span><strong>${timeTag(nx.when, nx.when.label)}</strong></p>` : ''}${dated(d.last) && d.last.kind !== 'year' ? `<p><span class="br-k">Last entry</span><strong>${timeTag(d.last, d.last.short)}</strong></p>` : ''}`
     : `<p><span class="br-k">${d.status === 'completed' ? 'Completed' : d.status === 'withdrawn' ? 'Withdrawn' : 'Blocked'}</span><strong>${dated(d.closed) ? timeTag(d.closed, d.closed.short) : (dated(d.last) ? timeTag(d.last, d.last.short) : '')}</strong></p>`;
-  return `<article class="board-row${d.open ? '' : ' is-closed'}" data-item data-search="${esc(search)}" data-status="${d.open ? 'open' : 'closed'}" data-sector="${esc(d.sectorSlug)}" data-authority="${esc(auths.join('|'))}">
+  return `<article class="board-row${d.open ? '' : ' is-closed'}" data-item data-docket="${esc(d.slug)}" data-last="${dated(d.last) ? d.last.iso : ''}" data-search="${esc(search)}" data-status="${d.open ? 'open' : 'closed'}" data-sector="${esc(d.sectorSlug)}" data-authority="${esc(auths.join('|'))}">
 <a class="br-main" href="${root}${d.url}">${d.no ? `<span class="br-no">${esc(d.no.label)}</span>` : ''}<h3>${esc(d.title)}</h3>${d.summary ? `<p class="br-sum">${esc(d.summary)}</p>` : ''}</a>
 <div class="br-track">${track(d, 'sm', root)}</div>
 <div class="br-side">${side}</div>
+<button class="follow-btn follow-icon" type="button" data-follow="${esc(d.slug)}" aria-pressed="false" aria-label="Follow ${esc(d.title)}" hidden>${STAR}</button>
 </article>`;
 }
 
@@ -572,7 +573,7 @@ function causeItem(it, root, compact, own = false) {
 }
 
 function wireList(entries, root) {
-  return `<ol class="wire">${entries.map(({ d, e }) => `<li><p class="w-meta">${timeTag(e.when, e.when.short)}<a href="${root}${d.url}#e-${e.n}">${esc(d.title)}</a></p><p class="w-text">${inline(e.text, root)}</p></li>`).join('')}</ol>`;
+  return `<ol class="wire">${entries.map(({ d, e }) => `<li data-date="${dated(e.when) ? e.when.iso : ''}"><p class="w-meta">${timeTag(e.when, e.when.short)}<a href="${root}${d.url}#e-${e.n}">${esc(d.title)}</a></p><p class="w-text">${inline(e.text, root)}</p></li>`).join('')}</ol>`;
 }
 
 function figureGrid(figs) {
@@ -595,7 +596,7 @@ function calendarLinks(root) {
 
 /* ---------- page shell ---------- */
 
-const NAV = [['dockets', 'Dockets', 'dockets/'], ['cause', 'Cause list', 'cause-list/'], ['regulators', 'Regulators', 'regulators/'], ['explainers', 'Analysis', 'explainers/'], ['rates', 'Rates', 'rates/'], ['about', 'About', 'about/']];
+const NAV = [['dockets', 'Dockets', 'dockets/'], ['timeline', 'Timeline', 'timeline/'], ['cause', 'Cause list', 'cause-list/'], ['regulators', 'Regulators', 'regulators/'], ['explainers', 'Analysis', 'explainers/'], ['rates', 'Rates', 'rates/'], ['about', 'About', 'about/']];
 const MARK = '<svg class="mark" viewBox="0 0 28 24" aria-hidden="true" focusable="false"><path d="M1 3.6C1 2.7 1.7 2 2.6 2h7.2c.4 0 .8.2 1.1.5L13.4 5h12c.9 0 1.6.7 1.6 1.6v13.8c0 .9-.7 1.6-1.6 1.6H2.6C1.7 22 1 21.3 1 20.4z" fill="#B3261E"/><path d="M6 12.5h16M6 16.5h10" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>';
 
 let FOOT_AUTH = [];
@@ -604,10 +605,10 @@ function shell(o) {
   const title = o.title ? `${o.title} | ${cfg.name}` : `${cfg.name}: ${cfg.tagline}`;
   const desc = o.description || cfg.description;
   const canon = o.path != null ? absUrl(o.path) : '';
-  const img = o.image ? (/^https?:/i.test(o.image) ? o.image : absUrl(o.image)) : absUrl('assets/og.png');
+  const img = o.image ? (/^https?:/i.test(o.image) ? o.image : absUrl(o.image)) : absUrl(SHARE_DEFAULT);
   const socialLinks = Object.keys(SOCIAL_LABELS).filter((k) => /^https?:\/\//.test((cfg.social || {})[k] || '')).map((k) => `<li><a href="${esc(cfg.social[k])}" rel="noopener">${SOCIAL_LABELS[k]}</a></li>`).join('');
   return `<!doctype html>
-<html lang="${esc(cfg.language || 'en')}">
+<html lang="${esc(cfg.language || 'en')}" data-root="${root}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -622,6 +623,7 @@ ${canon ? `<meta property="og:url" content="${esc(canon)}">\n` : ''}${img ? `<me
 <meta name="color-scheme" content="light">
 <link rel="icon" href="${root}assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="${root}assets/apple-touch-icon.png">
+<link rel="manifest" href="${root}manifest.webmanifest">
 <link rel="alternate" type="application/rss+xml" title="${esc(cfg.name)}: new docket entries" href="${root}wire.xml">
 <link rel="alternate" type="application/rss+xml" title="${esc(cfg.name)}: analysis" href="${root}rss.xml">
 <link rel="preload" href="${root}assets/fonts/Newsreader.woff2" as="font" type="font/woff2" crossorigin>
@@ -631,10 +633,11 @@ ${o.head || ''}</head>
 <body${o.pageClass ? ` class="${o.pageClass}"` : ''}>
 <a class="skip" href="#main">Skip to content</a>
 <header class="masthead">
-<div class="topline"><div class="wrap topline-in"><p>An independent record of East Africa's deals and disputes before regulators, tribunals and courts</p><p class="topline-r"><span>Updated ${esc(fmtFull(NOW))}</span><a href="${root}cause-list/#calendar">Calendar</a><a href="${root}wire.xml">Wire feed</a></p></div></div>
+<div class="topline"><div class="wrap topline-in"><p>An independent record of East Africa's deals and disputes before regulators, tribunals and courts</p><p class="topline-r"><button class="topline-btn" type="button" data-install hidden>Install the app</button><span>Updated ${esc(fmtFull(NOW))}</span><a href="${root}cause-list/#calendar">Calendar</a><a href="${root}wire.xml">Wire feed</a></p></div></div>
 <div class="mast"><div class="wrap mast-in">
 <a class="brand" href="${root}">${MARK}<span>${esc(cfg.name)}</span></a>
 <nav class="nav" aria-label="Sections">${NAV.map(([k, label, href]) => `<a href="${root}${href}"${o.active === k ? ' aria-current="page"' : ''}>${label}</a>`).join('')}</nav>
+<button class="search-btn" type="button" data-search-open aria-label="Search the docket" aria-keyshortcuts="Control+K Meta+K /" hidden><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="8.5" cy="8.5" r="5.75"/><path d="M13 13l4.5 4.5"/></svg><span class="search-label">Search</span><kbd>Ctrl K</kbd></button>
 <a class="btn btn-red mast-cta" href="${root}subscribe/">Get alerts</a>
 </div></div>
 </header>
@@ -648,7 +651,7 @@ ${o.body}
 <p>${esc(cfg.description)}</p>
 <p class="foot-small">An independent publication. It is not written for or on behalf of any law firm, client or party to the matters it covers, and nothing on this site is legal, financial or investment advice.</p>
 </div>
-<nav class="foot-col" aria-label="The docket"><p class="foot-h">The docket</p><ul><li><a href="${root}dockets/">All dockets</a></li><li><a href="${root}cause-list/">Cause list</a></li><li><a href="${root}regulators/">Regulators and courts</a></li><li><a href="${root}explainers/">Analysis</a></li><li><a href="${root}rates/">Rates</a></li></ul></nav>
+<nav class="foot-col" aria-label="The docket"><p class="foot-h">The docket</p><ul><li><a href="${root}dockets/">All dockets</a></li><li><a href="${root}cause-list/">Cause list</a></li><li><a href="${root}regulators/">Regulators and courts</a></li><li><a href="${root}timeline/">Timeline</a></li><li><a href="${root}explainers/">Analysis</a></li><li><a href="${root}rates/">Rates</a></li><li><a href="${root}data/">Open data</a></li></ul></nav>
 ${FOOT_AUTH.length ? `<nav class="foot-col" aria-label="Regulators and courts"><p class="foot-h">Regulators and courts</p><ul>${FOOT_AUTH.map((a) => `<li><a href="${root}regulators/${a.slug}/">${esc(a.name)}</a></li>`).join('')}</ul></nav>` : ''}
 <div class="foot-col"><p class="foot-h">Follow</p><ul><li><a href="${root}subscribe/">Email alerts</a></li><li><a href="${root}cause-list/#calendar">Cause list calendar</a></li><li><a href="${root}wire.xml">Wire feed</a></li>${socialLinks}<li><a href="${root}about/">About</a></li><li><a href="${root}privacy/">Privacy</a></li></ul></div>
 </div>
@@ -709,6 +712,8 @@ function build() {
   const authorities = [...new Set([...AUTH.values()])].filter((a) => a.known && a.gates.length).sort((a, b) => b.gates.length - a.gates.length || a.name.localeCompare(b.name));
   FOOT_AUTH = authorities.slice(0, 6);
 
+  renderShareImages(dockets, open);
+
   /* home */
   {
     const root = './';
@@ -731,7 +736,7 @@ ${lead ? leadCard(lead, root) : ''}
     }
     body += `<section class="block block-mist"><div class="wrap">
 <header class="block-h"><div><h2>Where every open matter stands</h2><p>Each row is a live docket. Its track shows the approvals and challenges the matter has to pass, in order, ending in completion.</p></div><a class="block-link" href="${root}dockets/">All dockets</a></header>
-${TRACK_KEY}${open.length ? `<div class="board">${open.map((d) => boardRow(d, root)).join('\n')}</div>` : '<p class="empty">The first docket opens here.</p>'}
+${TRACK_KEY}<div class="following" data-following hidden></div>${open.length ? `<div class="board">${open.map((d) => boardRow(d, root)).join('\n')}</div><p class="board-more"><a href="${root}timeline/">See every docket on the timeline</a></p>` : '<p class="empty">The first docket opens here.</p>'}
 </div></section>`;
     if (authorities.length) {
       body += `<section class="block"><div class="wrap">
@@ -758,7 +763,7 @@ ${cause.length ? `<ol class="cause cause-home">${cause.slice(0, 6).map((it) => c
     const root = rootFor(rel);
     const sectors = [...new Map(dockets.filter((d) => d.sector).map((d) => [d.sectorSlug, d.sector])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
     const filters = `<form class="filters" data-filter-form hidden role="search" onsubmit="return false"><label class="sr-only" for="f-q">Search dockets</label><input id="f-q" type="search" name="q" placeholder="Search parties, regulators or sectors"><label class="sr-only" for="f-status">Status</label><select id="f-status" name="status"><option value="">Open and closed</option><option value="open">Open</option><option value="closed">Closed</option></select><label class="sr-only" for="f-sector">Sector</label><select id="f-sector" name="sector"><option value="">All sectors</option>${sectors.map(([k, v]) => `<option value="${esc(k)}">${esc(v)}</option>`).join('')}</select><label class="sr-only" for="f-auth">Regulator or court</label><select id="f-auth" name="authority"><option value="">All regulators and courts</option>${authorities.map((a) => `<option value="${esc(a.slug)}">${esc(a.name)}</option>`).join('')}</select><span class="count" data-filter-count aria-live="polite">${count(dockets.length, 'docket', 'dockets')}</span></form>`;
-    const body = `${pageHead('Dockets', 'Every matter on the Wire, open and closed. Each docket is a live file: the approvals and challenges it has to pass, every step on the record with its source, and what comes next.')}<section class="wrap">${filters}${TRACK_KEY}${dockets.length ? `<div class="board">${[...open, ...closed].map((d) => boardRow(d, root)).join('\n')}</div><p class="empty" data-filter-empty hidden>No dockets match. Clear the search or a filter to see more.</p>` : '<p class="empty">The first docket opens here.</p>'}</section>`;
+    const body = `${pageHead('Dockets', 'Every matter on the Wire, open and closed. Each docket is a live file: the approvals and challenges it has to pass, every step on the record with its source, and what comes next.')}<section class="wrap">${filters}${TRACK_KEY}<div class="following" data-following hidden></div>${dockets.length ? `<div class="board">${[...open, ...closed].map((d) => boardRow(d, root)).join('\n')}</div><p class="empty" data-filter-empty hidden>No dockets match. Clear the search or a filter to see more.</p>` : '<p class="empty">The first docket opens here.</p>'}</section>`;
     write(rel, shell({ root, path: rel, title: 'Dockets', active: 'dockets', body }), { lastmod: lastEntry ? isoDay(lastEntry.start) : '' });
   }
 
@@ -775,7 +780,7 @@ ${cause.length ? `<ol class="cause cause-home">${cause.slice(0, 6).map((it) => c
       ['Last entry', esc(dated(d.last) ? d.last.label : 'None yet')],
     ];
     const gatesHtml = d.gates.length ? `<ol class="gates">${d.gates.map((g) => `<li class="gate-row st-${g.status}"><div class="gr-head"><span class="node" aria-hidden="true"></span><h3>${authLink(g.auth, root)}</h3><span class="badge st-${g.status}">${esc(STATUS[g.status].label)}</span></div><p class="gr-what">${esc(g.what)}${dated(g.when) ? `<span>${timeTag(g.when)}</span>` : ''}</p>${g.note ? `<p class="gr-note">${inline(g.note, root)}</p>` : ''}${srcLine(g.sources)}</li>`).join('')}</ol>` : '<p class="empty">No approvals or challenges on the record yet.</p>';
-    const sheet = d.entries.length ? `<ol class="sheet">${d.entries.map((e) => `<li id="e-${e.n}"><span class="sh-no">${e.n}</span><span class="sh-date">${dated(e.when) ? timeTag(e.when, e.when.short) : esc(e.when.label)}</span><div class="sh-body"><p>${inline(e.text, root)}</p>${srcLine(e.sources)}</div></li>`).join('')}</ol>` : '<p class="empty">No entries yet.</p>';
+    const sheet = d.entries.length ? `<ol class="sheet">${d.entries.map((e) => `<li id="e-${e.n}" data-date="${dated(e.when) ? e.when.iso : ''}"><span class="sh-no">${e.n}</span><span class="sh-date">${dated(e.when) ? timeTag(e.when, e.when.short) : esc(e.when.label)}</span><div class="sh-body"><p>${inline(e.text, root)}</p>${srcLine(e.sources)}</div></li>`).join('')}</ol>` : '<p class="empty">No entries yet.</p>';
     const nextItems = d.next.filter((n) => upcoming(n.when));
     const nextHtml = nextItems.length ? `<ol class="cause cause-compact">${nextItems.map((n) => causeItem({ when: n.when, text: n.text, sources: n.sources, docket: null, title: '', auth: null }, root, false, true)).join('')}</ol>` : `<p class="side-empty">${d.open ? 'No date on the record.' : 'Nothing further. This docket is closed.'}</p>`;
     const ex = d.explainerPost;
@@ -785,7 +790,8 @@ ${cause.length ? `<ol class="cause cause-home">${cause.slice(0, 6).map((it) => c
     const story = d.narrative.map((s, k) => `<section class="story${k === 0 ? ' story-first' : ''}" id="${esc(s.slug)}" aria-labelledby="${esc(s.slug)}-h"><h2 id="${esc(s.slug)}-h">${esc(s.title)}</h2><div class="prose">${md(s.text, root)}</div></section>`).join('\n');
     const storySrc = d.sources.length ? `<section class="story-sources" aria-labelledby="ss-h"><h2 id="ss-h">Sources for this story</h2><ol>${d.sources.map((s) => `<li>${srcLink(s)}</li>`).join('')}</ol></section>` : '';
     const glance = [['Kind', d.kind], ['Sector', d.sector], ['Where', d.country], ['Value', d.value || 'Not disclosed']].filter(([, v]) => v);
-    const body = `<article class="docket">
+    const actions = `<div class="dh-actions"><button class="follow-btn" type="button" data-follow="${esc(d.slug)}" aria-pressed="false" hidden>${STAR}<span>Follow</span></button><button class="dh-act" type="button" data-share-native data-title="${esc(d.title)}" hidden>Share</button><button class="dh-act" type="button" data-print hidden>Save as PDF</button>${d.open && dated(d.opened) ? `<span class="dh-age" data-since="${d.opened.start.toISOString().slice(0, 10)}" hidden></span>` : ''}</div>`;
+    const body = `<article class="docket" data-docket="${esc(d.slug)}" data-last="${dated(d.last) ? d.last.iso : ''}">
 <header class="docket-hero"><div class="wrap">
 <nav class="crumbs" aria-label="Breadcrumb"><a href="${root}dockets/">Dockets</a>${d.no ? `<span>${esc(d.no.label)}</span>` : ''}</nav>
 <div class="dh-grid">
@@ -793,6 +799,7 @@ ${cause.length ? `<ol class="cause cause-home">${cause.slice(0, 6).map((it) => c
 <p class="dh-kind">${esc([d.kind, d.sector].filter(Boolean).join(', '))}</p>
 <h1>${esc(d.title)}</h1>
 ${d.summary ? `<p class="dh-sum">${esc(d.summary)}</p>` : ''}
+${actions}
 </div>
 <dl class="dh-facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>
 </div>
@@ -818,7 +825,7 @@ ${ex ? `<section class="side-card side-ex" aria-labelledby="ex-h"><h2 id="ex-h">
 ${related.length ? `<section class="block block-mist"><div class="wrap"><header class="block-h"><div><h2>Before the same regulators and courts</h2><p>Other dockets that share at least one gate with this one.</p></div></header><div class="board">${related.map((x) => boardRow(x, root)).join('\n')}</div></div></section>` : ''}
 </article>`;
     const desc = `${d.no ? `${d.no.label}. ` : ''}${d.summary || d.title}. The story so far, every approval and challenge, and each step on the record with its source.`;
-    write(rel, shell({ root, path: rel, title: d.title, description: desc, active: 'dockets', body, pageClass: 'is-docket' }), { lastmod: dated(d.last) ? isoDay(d.last.start) : '' });
+    write(rel, shell({ root, path: rel, title: d.title, description: desc, active: 'dockets', body, pageClass: 'is-docket', image: SHARED.has(d.slug) ? `og/${d.slug}.png` : '' }), { lastmod: dated(d.last) ? isoDay(d.last.start) : '' });
   }
 
   /* cause list */
@@ -843,7 +850,7 @@ ${related.length ? `<section class="block block-mist"><div class="wrap"><header 
   {
     const rel = 'regulators/';
     const root = rootFor(rel);
-    const body = `${pageHead('Regulators and courts', 'The authorities whose yes, no or order decides whether a deal closes: competition and capital markets regulators, central banks and finance ministries, the PPP Committee, and the tribunals and courts that hear challenges to all of them. Each page lists the matters before it and what it has decided.')}<section class="block"><div class="wrap"><ul class="auth-cards auth-cards-all">${authorities.map((a) => authCard(a, root)).join('')}</ul></div></section>`;
+    const body = `${pageHead('Regulators and courts', 'The authorities whose yes, no or order decides whether a deal closes: competition and capital markets regulators, central banks and finance ministries, the PPP Committee, and the tribunals and courts that hear challenges to all of them. Each page lists the matters before it and what it has decided.')}<section class="block block-mist"><div class="wrap"><header class="block-h"><div><h2>The matrix</h2><p>Every docket against every regulator, tribunal and court that has a say in it. Hover or tap a gate for the decision.</p></div></header>${TRACK_KEY}${matrix(dockets, authorities, root)}</div></section><section class="block"><div class="wrap"><ul class="auth-cards auth-cards-all">${authorities.map((a) => authCard(a, root)).join('')}</ul></div></section>`;
     write(rel, shell({ root, path: rel, title: 'Regulators and courts', active: 'regulators', body }));
     for (const a of authorities) {
       const r2 = `regulators/${a.slug}/`;
@@ -941,6 +948,38 @@ ${newer || older ? `<nav class="post-nav" aria-label="More analysis">${older ? `
     write('404.html', shell({ root, title: 'Page not found', noindex: true, body }), { index: false });
   }
 
+  /* timeline */
+  {
+    const rel = 'timeline/';
+    const root = rootFor(rel);
+    const body = `${pageHead('Timeline', 'Every docket on one clock: when each matter opened, when each regulator, tribunal or court decided, and the dates still expected. Hover or tap a point for the entry, and open it to go to the docket.', '', 'wrap', 'The docket over time')}<section class="block"><div class="wrap"><div class="tl-bar">${TL_KEY}<button class="btn tl-jump" type="button" data-tl-jump hidden>Back to today</button></div>${timeline(dockets, root)}</div></section>`;
+    write(rel, shell({ root, path: rel, title: 'Timeline', active: 'timeline', description: 'Every East African deal and dispute on the Wire on one time axis: openings, decisions by regulators, tribunals and courts, and the dates still expected.', body }));
+  }
+
+  /* open data */
+  writeData(dockets, authorities, cause);
+  {
+    const rel = 'data/';
+    const root = rootFor(rel);
+    const base = SITE_URL ? `${SITE_URL}/` : root;
+    const example = `fetch('${base}api/dockets.json')\n  .then((res) => res.json())\n  .then((data) => data.dockets.filter((d) => d.status === 'open'));`;
+    const body = `${pageHead('Open data', 'Everything on Docket Wire as JSON and CSV, rebuilt every time the site is. Free to reuse: please credit Docket Wire and link to the docket.', '', 'wrap', 'For developers, researchers and newsrooms')}<section class="block"><div class="wrap data-page">
+<div class="table-wrap"><table class="data-table"><thead><tr><th scope="col">File</th><th scope="col">What it holds</th><th scope="col">Format</th></tr></thead><tbody>${DATA_FILES.map(([f, what, fmt]) => `<tr><td><a href="${root}${f}"><code>${esc(f)}</code></a></td><td>${esc(what)}</td><td>${fmt}</td></tr>`).join('')}</tbody></table></div>
+<section class="data-how"><h2>Using it</h2><p>Each docket carries its number, parties, status, what it is waiting on, every gate with its status and date, the full docket sheet and the dates still expected, each with its sources. Dates are ISO 8601 where the record gives a day or a month, and the label says what the record says.</p><pre><code>${esc(example)}</code></pre><p>The files change whenever a docket does. For new entries as they land, use the <a href="${root}wire.xml">Wire feed</a>; for dates, the <a href="${root}cause-list/#calendar">calendar</a>.</p></section>
+</div></section>`;
+    write(rel, shell({ root, path: rel, title: 'Open data', description: 'Docket Wire as JSON and CSV: every docket, gate, entry and date, free to reuse with credit.', body }));
+  }
+  fs.writeFileSync(path.join(OUT, 'search.json'), JSON.stringify({ v: BUILD_ID, items: searchIndex(dockets, explainers, authorities, cause) }));
+
+  /* offline page and app files */
+  {
+    const rel = 'offline/';
+    const root = rootFor(rel);
+    const body = `${pageHead('You are offline', 'Dockets you have opened on this device are still here. Everything else comes back when your connection does.')}<section class="block"><div class="wrap"><p class="lost"><a class="btn" href="${root}">Front page</a> <a class="btn" href="${root}dockets/">Dockets</a></p></div></section>`;
+    write(rel, shell({ root, path: rel, title: 'Offline', noindex: true, body }), { index: false });
+  }
+  writeApp();
+
   /* feeds and calendar */
   const xml = (s) => esc(s);
   const cdata = (s) => `<![CDATA[${String(s).replace(/]]>/g, ']]]]><![CDATA[>')}]]>`;
@@ -997,6 +1036,318 @@ ${sitemap.map((s) => `<url><loc>${xml(absUrl(s.loc))}</loc>${s.lastmod ? `<lastm
   if (!EMBED && !(cfg.subscribe && cfg.subscribe.formAction)) warn('No sign-up form yet: paste your beehiiv embed code into content/subscribe-embed.html.');
   console.log(`Built ${count(dockets.length, 'docket', 'dockets')} (${open.length} open), ${count(explainers.length, 'explainer', 'explainers')}, ${count(cause.length, 'date', 'dates')} on the cause list, ${count(authorities.length, 'regulator page', 'regulator pages')} and ${count(figs.length, 'rate', 'rates')} into dist/.`);
   [...new Set(warnings)].forEach((w) => console.log(`Note: ${w}`));
+}
+
+/* ---------- timeline, matrix, search, open data, share images, app ---------- */
+
+const DAY_MS = 86400000;
+let SHARE_DEFAULT = 'assets/og.png';
+const SHARED = new Set();
+const mdText = (s) => String(s || '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/(\*\*|__)(.+?)\1/g, '$2').replace(/(^|[\s(])[*_](\S(?:.*?\S)?)[*_](?=[\s).,;:!?]|$)/g, '$1$2').replace(/\s+/g, ' ').trim();
+const gateTip = (g) => `${g.auth ? g.auth.name : ''}: ${STATUS[g.status].label}${dated(g.when) ? `, ${g.when.label}` : ''}`;
+const closedWord = (d) => (d.status === 'completed' ? 'Completed' : d.status === 'withdrawn' ? 'Withdrawn' : 'Blocked');
+const midOf = (w) => (w.kind === 'day' ? w.start.getTime() : (w.start.getTime() + w.end.getTime()) / 2);
+const STAR = '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 1.8l2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.6-5 2.6.9-5.6-4-3.9 5.6-.8z"/></svg>';
+
+/* One node, drawn in SVG for the timeline. Colours come from the stylesheet. */
+function svgNode(status, x, y, r) {
+  if (['hold', 'challenged', 'refused'].includes(status)) {
+    const k = r + 1;
+    return `<path class="tl-node st-${status}" d="M${x} ${y - k}L${x + k} ${y}L${x} ${y + k}L${x - k} ${y}Z"/>`;
+  }
+  if (status === 'conditions') return `<g class="tl-node st-conditions"><circle cx="${x}" cy="${y}" r="${r}"/><path d="M${x} ${y - r}A${r} ${r} 0 0 0 ${x} ${y + r}Z"/></g>`;
+  return `<circle class="tl-node st-${status}" cx="${x}" cy="${y}" r="${r}"/>`;
+}
+
+function timeline(dockets, root) {
+  const rows = dockets.slice().sort((a, b) => whenSort(a.opened) - whenSort(b.opened));
+  const pts = [TODAY];
+  const use = (w) => dated(w) && w.kind !== 'year';
+  rows.forEach((d) => {
+    d.entries.forEach((e) => use(e.when) && pts.push(e.when.start.getTime()));
+    d.gates.forEach((g) => use(g.when) && pts.push(g.when.start.getTime()));
+    if (d.open) d.next.forEach((n) => use(n.when) && pts.push(n.when.end.getTime()));
+    if (use(d.closed)) pts.push(d.closed.end.getTime());
+  });
+  const lo = new Date(Math.min(...pts)), hi = new Date(Math.max(...pts));
+  const start = Date.UTC(lo.getUTCFullYear(), lo.getUTCMonth() - 1, 1);
+  const end = Date.UTC(hi.getUTCFullYear(), hi.getUTCMonth() + 2, 1);
+  const sd = new Date(start), ed = new Date(end);
+  const months = (ed.getUTCFullYear() - sd.getUTCFullYear()) * 12 + ed.getUTCMonth() - sd.getUTCMonth();
+  const PX = 80, W = months * PX, ROW = 66, TOP = 54, H = TOP + rows.length * ROW + 6;
+  const X = (t) => Math.round(((t - start) / (end - start)) * W * 10) / 10;
+
+  let grid = '', months$ = '', bands = '', body = '';
+  for (let m = 0; m <= months; m++) {
+    const dt = new Date(Date.UTC(sd.getUTCFullYear(), sd.getUTCMonth() + m, 1));
+    const x = X(dt.getTime()), jan = dt.getUTCMonth() === 0;
+    grid += `<line class="tl-grid${jan ? ' tl-jan' : ''}" x1="${x}" x2="${x}" y1="${TOP - 12}" y2="${H}"/>`;
+    if (m < months) months$ += `<text class="tl-month${jan ? ' tl-jan' : ''}" x="${x + 7}" y="${TOP - 18}">${MON[dt.getUTCMonth()]}${jan || m === 0 ? ` ${dt.getUTCFullYear()}` : ''}</text>`;
+  }
+  rows.forEach((d, i) => {
+    const y0 = TOP + i * ROW, yc = y0 + ROW / 2 + 9, yg = yc - 20;
+    if (i % 2 === 0) bands += `<rect class="tl-band" x="0" y="${y0}" width="${W}" height="${ROW}"/>`;
+    const ents = d.entries.filter((e) => use(e.when));
+    let g = '';
+    if (ents.length) {
+      const xa = X(midOf(ents[0].when));
+      const stop = d.open ? TODAY : dated(d.closed) ? midOf(d.closed) : midOf(ents[ents.length - 1].when);
+      g += `<line class="tl-life" x1="${xa}" x2="${X(stop)}" y1="${yc}" y2="${yc}"/>`;
+      const fut = d.open ? d.next.filter((n) => use(n.when)).map((n) => n.when.end.getTime()).filter((t) => t > TODAY) : [];
+      if (fut.length) g += `<line class="tl-future" x1="${X(TODAY)}" x2="${X(Math.max(...fut))}" y1="${yc}" y2="${yc}"/>`;
+    }
+    if (d.open) d.next.forEach((n) => {
+      if (!use(n.when) || n.when.end.getTime() < TODAY) return;
+      const tip = esc(`Expected ${n.when.label}\n${mdText(n.text)}`);
+      if (n.when.kind === 'day') {
+        const x = X(n.when.start.getTime());
+        g += `<a href="${root}${d.url}#next-h" class="tl-pt" data-tip="${tip}"><path class="tl-next${n.when.approx ? ' is-approx' : ''}" d="M${x} ${yc - 7}L${x + 7} ${yc}L${x} ${yc + 7}L${x - 7} ${yc}Z"/></a>`;
+      } else {
+        const xa = X(Math.max(n.when.start.getTime(), start)), xb = X(n.when.end.getTime() + DAY_MS);
+        g += `<a href="${root}${d.url}#next-h" class="tl-pt" data-tip="${tip}"><rect class="tl-window" x="${xa}" y="${yc - 8}" width="${Math.max(8, xb - xa)}" height="16" rx="4"/></a>`;
+      }
+    });
+    ents.forEach((e) => {
+      g += `<a href="${root}${d.url}#e-${e.n}" class="tl-pt" data-tip="${esc(`${e.when.label}\n${mdText(e.text)}`)}"><circle class="tl-entry${e.when.kind === 'day' ? '' : ' is-month'}" cx="${X(midOf(e.when))}" cy="${yc}" r="4.5"/></a>`;
+    });
+    const byDay = new Map();
+    d.gates.filter((x) => use(x.when)).forEach((x) => { const k = x.when.iso; if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(x); });
+    for (const list of byDay.values()) {
+      const x = X(midOf(list[0].when));
+      const tip = esc(`${list[0].when.label}\n${list.map(gateTip).join('\n')}`);
+      g += `<line class="tl-stem" x1="${x}" x2="${x}" y1="${yg}" y2="${yc}"/><a href="${root}${d.url}#gates-h" class="tl-pt" data-tip="${tip}">${list.length === 1 ? svgNode(list[0].status, x, yg, 6.5) : `<circle class="tl-cluster" cx="${x}" cy="${yg}" r="9.5"/><text class="tl-count" x="${x}" y="${yg + 4}">${list.length}</text>`}</a>`;
+    }
+    if (!d.open && dated(d.closed)) {
+      const x = X(midOf(d.closed));
+      g += `<a href="${root}${d.url}" class="tl-pt" data-tip="${esc(`${closedWord(d)} ${d.closed.label}`)}"><rect class="tl-done" x="${x - 6.5}" y="${yc - 6.5}" width="13" height="13" rx="2"/></a>`;
+    }
+    body += `<g class="tl-row${d.open ? '' : ' is-closed'}">${g}</g>`;
+  });
+  const xt = X(TODAY);
+  const today = `<g class="tl-today" data-tl-today data-x="${xt}"><line x1="${xt}" x2="${xt}" y1="${TOP - 34}" y2="${H}"/><rect x="${xt - 26}" y="4" width="52" height="20" rx="10"/><text x="${xt}" y="18">Today</text></g>`;
+  const labels = rows.map((d) => `<div class="tl-label${d.open ? '' : ' is-closed'}"><a href="${root}${d.url}" title="${esc(d.title)}">${d.no ? `<span class="tl-no">${esc(d.no.label)}</span>` : ''}<strong>${esc(d.title)}</strong></a><span class="tl-state">${esc(d.open ? `Waiting on ${d.waiting.text}` : `${closedWord(d)}${dated(d.closed) ? ` ${d.closed.short}` : ''}`)}</span></div>`).join('');
+  const defs = '<defs><pattern id="tl-hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="tl-hatch-bg" width="7" height="7"/><line class="tl-hatch-line" x1="0" y1="0" x2="0" y2="7"/></pattern></defs>';
+  return `<div class="tl" style="--row:${ROW}px;--top:${TOP}px" data-tl data-start="${start}" data-end="${end}" data-w="${W}">
+<div class="tl-labels"><div class="tl-labels-head">Docket</div>${labels}</div>
+<div class="tl-scroll" tabindex="0" role="region" aria-label="Timeline of every docket. Scroll sideways to move through time.">
+<svg class="tl-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="group" aria-label="Every docket from ${esc(fmtFull(sd))} to ${esc(fmtFull(new Date(end - DAY_MS)))}">${defs}${bands}${grid}${months$}${body}${today}</svg>
+</div>
+</div>`;
+}
+
+const TL_KEY = `<ul class="tl-key" aria-label="Key to the timeline">
+<li><svg viewBox="0 0 16 16" aria-hidden="true"><circle class="tl-entry" cx="8" cy="8" r="4.5"/></svg>An entry on the docket sheet</li>
+<li><svg viewBox="0 0 16 16" aria-hidden="true">${svgNode('cleared', 8, 8, 5.5)}</svg><svg viewBox="0 0 16 16" aria-hidden="true">${svgNode('conditions', 8, 8, 5.5)}</svg><svg viewBox="0 0 16 16" aria-hidden="true">${svgNode('challenged', 8, 8, 5)}</svg>A regulator's, tribunal's or court's decision</li>
+<li><svg viewBox="0 0 20 20" aria-hidden="true"><circle class="tl-cluster" cx="10" cy="10" r="8.5"/><text class="tl-count" x="10" y="13.5">3</text></svg>Several decisions on one day</li>
+<li><svg viewBox="0 0 16 16" aria-hidden="true"><path class="tl-next" d="M8 2L14 8L8 14L2 8Z"/></svg>An expected date</li>
+<li><svg viewBox="0 0 28 16" aria-hidden="true"><rect class="tl-window" x="1" y="3" width="26" height="10" rx="3"/></svg>An expected window</li>
+</ul>`;
+
+function matrix(dockets, authorities, root) {
+  const rows = [...dockets.filter((d) => d.open), ...dockets.filter((d) => !d.open)];
+  const head = `<tr><th scope="col" class="mx-corner">Docket</th>${authorities.map((a) => `<th scope="col" class="mx-col"><a href="${root}regulators/${a.slug}/" title="${esc(a.name)}"><span>${esc(a.short)}</span></a></th>`).join('')}</tr>`;
+  const body = rows.map((d) => `<tr${d.open ? '' : ' class="is-closed"'}><th scope="row"><a href="${root}${d.url}">${esc(d.title)}</a>${d.no ? `<span>${esc(d.no.label)}</span>` : ''}</th>${authorities.map((a) => {
+    const gs = d.gates.filter((g) => g.auth === a);
+    if (!gs.length) return '<td></td>';
+    const g = gs.slice().sort((x, y) => STATUS[y.status].waiting - STATUS[x.status].waiting)[0];
+    return `<td class="st-${g.status}" data-tip="${esc(`${d.title}\n${gs.map((x) => `${x.what}: ${STATUS[x.status].label}${dated(x.when) ? `, ${x.when.label}` : ''}`).join('\n')}`)}"><span class="node" aria-hidden="true"></span><span class="sr-only">${esc(a.name)}: ${esc(gs.map((x) => STATUS[x.status].label).join(', '))}</span></td>`;
+  }).join('')}</tr>`).join('');
+  return `<div class="mx-wrap" tabindex="0" role="region" aria-label="Every docket against every regulator and court. Scroll sideways for more."><table class="mx"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+}
+
+function searchIndex(dockets, explainers, authorities, cause) {
+  const items = [];
+  const add = (t, title, sub, url, k = '') => items.push({ t, title, sub: String(sub || '').slice(0, 200), url, k });
+  dockets.forEach((d) => {
+    add('Docket', d.title, `${d.no ? `${d.no.label}. ` : ''}${d.summary}`, d.url, [d.parties, d.kind, d.sector, d.country, d.value, d.gates.map((g) => (g.auth ? `${g.auth.name} ${g.auth.short}` : '')).join(' ')].join(' '));
+    d.entries.forEach((e) => add('Entry', `${d.title}, ${e.when.label}`, mdText(e.text), `${d.url}#e-${e.n}`));
+  });
+  authorities.forEach((a) => add('Regulator', a.name, [a.kind, a.country].filter(Boolean).join(', '), `regulators/${a.slug}/`, `${a.short} ${a.about}`));
+  explainers.forEach((p) => add('Analysis', p.title, p.dek || p.short || '', p.url, p.tags.join(' ')));
+  cause.forEach((it) => add('Date', `${it.when.label}: ${it.docket ? it.docket.title : it.title}`, mdText(it.text), it.docket ? `${it.docket.url}#next-h` : 'cause-list/'));
+  [['Timeline', 'timeline/'], ['Cause list', 'cause-list/'], ['Regulators and courts', 'regulators/'], ['Rates', 'rates/'], ['Open data', 'data/'], ['Email alerts', 'subscribe/'], ['About', 'about/']].forEach(([n, u]) => add('Page', n, '', u));
+  return items;
+}
+
+function apiDocket(d) {
+  const iso = (w) => (dated(w) ? w.iso : null);
+  return {
+    number: d.no ? d.no.label : null, slug: d.slug, url: absUrl(d.url) || d.url, title: d.title, summary: d.summary,
+    kind: d.kind, sector: d.sector, country: d.country, value: d.value,
+    parties: String(d.parties || '').split(';').map((x) => x.trim()).filter(Boolean),
+    status: d.status, closed: iso(d.closed), waiting_on: d.open ? d.waiting.text : null, first_entry: iso(d.opened), last_entry: iso(d.last),
+    gates: d.gates.map((g) => ({ authority: g.auth ? g.auth.name : null, authority_code: g.auth ? g.auth.code : null, what: g.what, status: g.status, status_label: STATUS[g.status].label, date: iso(g.when), date_label: dated(g.when) ? g.when.label : null, note: mdText(g.note), sources: g.sources })),
+    entries: d.entries.map((e) => ({ n: e.n, date: iso(e.when), date_label: e.when.label, text: mdText(e.text), sources: e.sources })),
+    next: d.next.map((n) => ({ date: iso(n.when), date_label: n.when.label, approximate: n.when.approx, text: mdText(n.text), sources: n.sources })),
+  };
+}
+const csvCell = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+const toCSV = (rows) => `${rows.map((r) => r.map(csvCell).join(',')).join('\n')}\n`;
+const srcText = (list) => list.map((s) => (s.url ? `${s.name} <${s.url}>` : s.name)).join('; ');
+
+function writeData(dockets, authorities, cause) {
+  const dir = path.join(OUT, 'api');
+  fs.mkdirSync(path.join(dir, 'dockets'), { recursive: true });
+  const stamp = NOW.toISOString();
+  const all = dockets.map(apiDocket);
+  const json = (f, o) => fs.writeFileSync(path.join(dir, f), `${JSON.stringify(o, null, 1)}\n`);
+  json('dockets.json', { name: cfg.name, updated: stamp, count: all.length, dockets: all });
+  all.forEach((d) => json(`dockets/${d.slug}.json`, { updated: stamp, docket: d }));
+  json('cause-list.json', { updated: stamp, dates: cause.map((it) => ({ date: dated(it.when) ? it.when.iso : null, date_label: it.when.label, approximate: it.when.approx, docket: it.docket ? it.docket.slug : null, title: it.docket ? it.docket.title : it.title, text: mdText(it.text), authority: it.auth ? it.auth.name : null, sources: it.sources })) });
+  json('regulators.json', { updated: stamp, regulators: authorities.map((a) => ({ code: a.code, name: a.name, short: a.short, kind: a.kind, country: a.country, website: a.website || null, url: absUrl(`regulators/${a.slug}/`) || `regulators/${a.slug}/`, gates: a.gates.map(({ docket: d, gate: g }) => ({ docket: d.slug, what: g.what, status: g.status, date: dated(g.when) ? g.when.iso : null })) })) });
+  fs.writeFileSync(path.join(dir, 'dockets.csv'), toCSV([['number', 'slug', 'title', 'summary', 'kind', 'sector', 'country', 'value', 'status', 'waiting_on', 'first_entry', 'last_entry', 'url'], ...all.map((d) => [d.number, d.slug, d.title, d.summary, d.kind, d.sector, d.country, d.value, d.status, d.waiting_on, d.first_entry, d.last_entry, d.url])]));
+  fs.writeFileSync(path.join(dir, 'entries.csv'), toCSV([['docket_number', 'docket', 'n', 'date', 'date_label', 'text', 'sources'], ...all.flatMap((d) => d.entries.map((e) => [d.number, d.slug, e.n, e.date, e.date_label, e.text, srcText(e.sources)]))]));
+  fs.writeFileSync(path.join(dir, 'gates.csv'), toCSV([['docket_number', 'docket', 'authority_code', 'authority', 'what', 'status', 'date', 'note', 'sources'], ...all.flatMap((d) => d.gates.map((g) => [d.number, d.slug, g.authority_code, g.authority, g.what, g.status_label, g.date, g.note, srcText(g.sources)]))]));
+}
+
+const DATA_FILES = [
+  ['api/dockets.json', 'Every docket in full: facts, gates, docket sheet, next dates and sources', 'JSON'],
+  ['api/dockets/asahi-eabl.json', 'One docket, by its address. Swap in any docket\'s name', 'JSON'],
+  ['api/cause-list.json', 'The dates coming up on open dockets and in the rules', 'JSON'],
+  ['api/regulators.json', 'Regulators, tribunals and courts, with the gates before each', 'JSON'],
+  ['api/dockets.csv', 'One row per docket', 'CSV'],
+  ['api/entries.csv', 'One row per entry on every docket sheet', 'CSV'],
+  ['api/gates.csv', 'One row per gate on every docket', 'CSV'],
+  ['calendar.ics', 'The cause list as a calendar feed', 'iCalendar'],
+  ['wire.xml', 'New docket entries as they are added', 'RSS'],
+];
+
+/* ---------- share images: one per docket, drawn at build time when the renderer is installed ---------- */
+
+function wrapText(text, maxChars, maxLines) {
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let cur = '';
+  for (const w of words) {
+    if ((cur ? `${cur} ${w}` : w).length <= maxChars) cur = cur ? `${cur} ${w}` : w;
+    else { if (cur) lines.push(cur); cur = w; }
+  }
+  if (cur) lines.push(cur);
+  if (lines.length > maxLines) { const keep = lines.slice(0, maxLines); keep[maxLines - 1] = `${keep[maxLines - 1].replace(/[\s,.;:]+\S*$/, '')}...`; return keep; }
+  return lines;
+}
+const xmlEsc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const OG = { ink: '#0e2233', ink2: '#15304a', white: '#ffffff', soft: 'rgba(255,255,255,0.72)', faint: 'rgba(255,255,255,0.3)', red: '#b3261e', ok: '#52c08d', bad: '#ff7d73', brass: '#c7a36a' };
+
+function ogNode(status, x, y, r) {
+  if (['hold', 'challenged', 'refused'].includes(status)) {
+    const k = r + 2;
+    return `<path d="M${x} ${y - k}L${x + k} ${y}L${x} ${y + k}L${x - k} ${y}Z" fill="${status === 'hold' ? OG.ink : OG.bad}" stroke="${OG.bad}" stroke-width="4"/>`;
+  }
+  if (status === 'cleared') return `<circle cx="${x}" cy="${y}" r="${r}" fill="${OG.ok}"/>`;
+  if (status === 'conditions') return `<circle cx="${x}" cy="${y}" r="${r - 2}" fill="${OG.ink}" stroke="${OG.ok}" stroke-width="4"/><path d="M${x} ${y - r}A${r} ${r} 0 0 0 ${x} ${y + r}Z" fill="${OG.ok}"/>`;
+  if (status === 'unknown') return `<circle cx="${x}" cy="${y}" r="${r - 2}" fill="${OG.ink}" stroke="${OG.soft}" stroke-width="3" stroke-dasharray="4 4"/>`;
+  if (status === 'end-done') return `<rect x="${x - r}" y="${y - r}" width="${2 * r}" height="${2 * r}" rx="3" fill="${OG.white}"/>`;
+  if (status === 'end') return `<rect x="${x - r + 2}" y="${y - r + 2}" width="${2 * r - 4}" height="${2 * r - 4}" rx="3" fill="${OG.ink}" stroke="${OG.white}" stroke-width="4"/>`;
+  return `<circle cx="${x}" cy="${y}" r="${r - 2}" fill="${OG.ink}" stroke="${OG.soft}" stroke-width="4"/>`;
+}
+
+function ogFrame(inner, tab) {
+  const mark = '<g transform="translate(64 52) scale(1.55)"><path d="M1 3.6C1 2.7 1.7 2 2.6 2h7.2c.4 0 .8.2 1.1.5L13.4 5h12c.9 0 1.6.7 1.6 1.6v13.8c0 .9-.7 1.6-1.6 1.6H2.6C1.7 22 1 21.3 1 20.4z" fill="#B3261E"/><path d="M6 12.5h16M6 16.5h10" stroke="#fff" stroke-width="2" stroke-linecap="round"/></g>';
+  const host = SITE_URL ? SITE_URL.replace(/^https?:\/\//, '') : '';
+  const tabW = tab ? 44 + tab.length * 14 : 0;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+<rect width="1200" height="630" fill="${OG.ink}"/><rect y="618" width="1200" height="12" fill="${OG.red}"/>
+${mark}<text x="120" y="88" font-family="Schibsted Grotesk" font-weight="700" font-size="32" fill="${OG.white}">${xmlEsc(cfg.name)}</text>
+${tab ? `<path d="M${1136 - tabW} 50h${tabW - 22}l22 38H${1136 - tabW}z" fill="${OG.red}"/><text x="${1136 - tabW + 20}" y="77" font-family="Schibsted Grotesk" font-weight="700" font-size="22" fill="${OG.white}">${xmlEsc(tab)}</text>` : ''}
+${inner}
+${host ? `<text x="1136" y="592" text-anchor="end" font-family="Schibsted Grotesk" font-weight="500" font-size="20" fill="${OG.soft}">${xmlEsc(host)}</text>` : ''}
+</svg>`;
+}
+
+function ogTrack(d, y) {
+  const nodes = [...d.gates.map((g) => ({ label: g.auth ? g.auth.short : '', status: g.status })), { label: d.status === 'completed' ? 'Completed' : 'Completion', status: d.status === 'completed' ? 'end-done' : 'end' }];
+  const n = nodes.length, x0 = 96, x1 = 1104, step = n > 1 ? (x1 - x0) / (n - 1) : 0;
+  const chars = Math.max(6, Math.floor(step / 10.5));
+  let lines = '', dots = '', labels = '';
+  nodes.forEach((nd, k) => {
+    const x = Math.round(x0 + k * step);
+    if (k > 0) {
+      const ok = ['cleared', 'conditions'].includes(nd.status) || nd.status === 'end-done';
+      lines += `<line x1="${Math.round(x0 + (k - 1) * step)}" y1="${y}" x2="${x}" y2="${y}" stroke="${ok ? OG.white : OG.faint}" stroke-width="4"${ok ? '' : ' stroke-dasharray="9 8"'}/>`;
+    }
+    dots += ogNode(nd.status, x, y, 13);
+    wrapText(nd.label, chars, 2).forEach((ln, j) => { labels += `<text x="${x}" y="${y + 44 + j * 22}" text-anchor="middle" font-family="Schibsted Grotesk" font-weight="500" font-size="19" fill="${OG.soft}">${xmlEsc(ln)}</text>`; });
+  });
+  return lines + dots + labels;
+}
+
+/* The renderer is an optional package. On GitHub it installs itself; on a computer, run
+   "npm install @resvg/resvg-js" once to draw share images locally too. */
+function loadRenderer() {
+  try { return require('@resvg/resvg-js').Resvg; } catch (e) { /* not installed yet */ }
+  if (!process.env.GITHUB_ACTIONS) return null;
+  try {
+    require('child_process').execSync('npm install --no-save --no-audit --no-fund --loglevel=error @resvg/resvg-js@2.6.2', { cwd: ROOT, stdio: 'ignore', timeout: 180000 });
+    return require('@resvg/resvg-js').Resvg;
+  } catch (e) { warn('Share images skipped: the renderer could not be installed, so pages use the standard share image.'); return null; }
+}
+
+function renderShareImages(dockets, open) {
+  const Resvg = loadRenderer();
+  if (!Resvg) return;
+  const dir = path.join(ROOT, 'assets', 'fonts', 'og');
+  const fontFiles = ['SchibstedGrotesk-Bold.ttf', 'SchibstedGrotesk-Medium.ttf', 'Newsreader-SemiBold.ttf'].map((f) => path.join(dir, f)).filter((f) => fs.existsSync(f));
+  if (fontFiles.length < 3) { warn('Share images skipped: the fonts in assets/fonts/og are missing.'); return; }
+  fs.mkdirSync(path.join(OUT, 'og'), { recursive: true });
+  const render = (svg, name) => {
+    try {
+      const png = new Resvg(svg, { font: { fontFiles, loadSystemFonts: false, defaultFontFamily: 'Schibsted Grotesk' }, fitTo: { mode: 'width', value: 1200 } }).render().asPng();
+      fs.writeFileSync(path.join(OUT, 'og', `${name}.png`), png);
+      return true;
+    } catch (e) { warn(`Share image for ${name} failed: ${e.message}`); return false; }
+  };
+  for (const d of dockets) {
+    const title = wrapText(d.title, 30, 2);
+    const sum = wrapText(d.summary, 70, 2);
+    const ty = 196, sy = ty + (title.length - 1) * 70 + 58;
+    const facts = d.open ? [['Waiting on', d.waiting.text], ['Last entry', dated(d.last) ? d.last.label : 'None yet']] : [[closedWord(d), dated(d.closed) ? d.closed.label : ''], ['Gates passed', String(d.gates.length)]];
+    const inner = `${title.map((ln, j) => `<text x="64" y="${ty + j * 70}" font-family="Newsreader" font-weight="600" font-size="66" fill="${OG.white}">${xmlEsc(ln)}</text>`).join('')}
+${sum.map((ln, j) => `<text x="64" y="${sy + j * 34}" font-family="Schibsted Grotesk" font-weight="500" font-size="26" fill="${OG.soft}">${xmlEsc(ln)}</text>`).join('')}
+${ogTrack(d, 430)}
+${facts.map(([k, v], j) => `<text x="${64 + j * 420}" y="560" font-family="Schibsted Grotesk" font-weight="700" font-size="17" fill="${OG.brass}" letter-spacing="1.5">${xmlEsc(k.toUpperCase())}</text><text x="${64 + j * 420}" y="592" font-family="Schibsted Grotesk" font-weight="700" font-size="25" fill="${OG.white}">${xmlEsc(wrapText(v, 30, 1)[0] || '')}</text>`).join('')}`;
+    if (render(ogFrame(inner, d.no ? d.no.label : ''), d.slug)) SHARED.add(d.slug);
+  }
+  const lead = open.find((d) => d.gates.some((g) => STATUS[g.status].waiting >= 2)) || open[0];
+  const head = wrapText(`${cfg.tagline}.`, 34, 3);
+  const waiting = open.filter((d) => d.gates.some((g) => STATUS[g.status].waiting)).length;
+  const inner = `${head.map((ln, j) => `<text x="64" y="${190 + j * 72}" font-family="Newsreader" font-weight="600" font-size="68" fill="${OG.white}">${xmlEsc(ln)}</text>`).join('')}
+<text x="64" y="${190 + head.length * 72 + 8}" font-family="Schibsted Grotesk" font-weight="500" font-size="26" fill="${OG.soft}">${xmlEsc(`${count(open.length, 'open matter', 'open matters')}, ${waiting} waiting on a regulator, court or tribunal`)}</text>
+${lead ? `<text x="64" y="468" font-family="Schibsted Grotesk" font-weight="700" font-size="17" fill="${OG.brass}" letter-spacing="1.5">${xmlEsc(`ON THE DOCKET: ${lead.title.toUpperCase()}`)}</text>${ogTrack(lead, 512)}` : ''}`;
+  if (render(ogFrame(inner, ''), 'site')) SHARE_DEFAULT = 'og/site.png';
+}
+
+/* ---------- app: manifest, service worker, offline page ---------- */
+
+function writeApp() {
+  const manifest = {
+    name: cfg.name, short_name: cfg.name, description: cfg.description, lang: cfg.language || 'en',
+    start_url: './', scope: './', display: 'standalone', background_color: '#0e2233', theme_color: '#0e2233',
+    icons: [
+      { src: 'assets/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: 'assets/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: 'assets/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+    ],
+  };
+  fs.writeFileSync(path.join(OUT, 'manifest.webmanifest'), `${JSON.stringify(manifest, null, 1)}\n`);
+  const core = ['./', 'offline/', `assets/style.css?v=${BUILD_ID}`, `assets/site.js?v=${BUILD_ID}`, 'assets/fonts/SchibstedGrotesk.woff2', 'assets/fonts/Newsreader.woff2', 'assets/favicon.svg'];
+  fs.writeFileSync(path.join(OUT, 'sw.js'), `/* ${cfg.name} offline support. Pages load from the network first and fall back to the copy saved on this device. */
+const CACHE = 'dw-${BUILD_ID}';
+const CORE = ${JSON.stringify(core)};
+self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE)).then(() => self.skipWaiting())); });
+self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k.startsWith('dw-') && k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
+self.addEventListener('fetch', (e) => {
+  const req = e.request;
+  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  const keep = (res) => { if (res && res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); } return res; };
+  const fresh = req.mode === 'navigate' || /\\.(json|xml|ics|csv)$/.test(new URL(req.url).pathname);
+  if (fresh) {
+    e.respondWith(fetch(req).then(keep).catch(() => caches.match(req).then((hit) => hit || (req.mode === 'navigate' ? caches.match('offline/') : Response.error()))));
+    return;
+  }
+  e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then(keep)));
+});
+`);
 }
 
 /* ---------- local preview ---------- */

@@ -4,6 +4,24 @@ Live dockets on the deals and disputes that reach East Africa's regulators and c
 
 The site is plain files. A small builder (`build.js`, no installs) turns the text files in `content/` into the website, and GitHub publishes it for free.
 
+## What readers can do
+
+**Dockets.** Each matter has its gate track, the story so far, the docket sheet and the dates coming up. Readers can follow a docket with the star, copy a link to any single entry, share it, or save the whole docket as a PDF.
+
+**Timeline.** `/timeline/` puts every docket on one time axis: each entry, each decision by a regulator, tribunal or court, and the dates still expected, with today marked. Hover or tap a point to read it.
+
+**The matrix.** The Regulators page opens with every docket set against every authority that has a say in it, so you can see at a glance who is holding up what.
+
+**Search.** The search button, Ctrl + K (Cmd + K on a Mac) or the / key opens a search across dockets, entries, regulators, analysis and dates.
+
+**Following.** Followed dockets appear above the board and are marked New when they get entries the reader has not seen. The front page also marks entries added since the reader's last visit. All of this stays in the reader's browser; nothing is sent anywhere.
+
+**Share images.** Every docket gets its own preview picture for LinkedIn, WhatsApp and X, showing its gate track and what it is waiting on. GitHub draws them each time the site publishes; if that step ever fails, pages fall back to the standard image and the site still publishes.
+
+**Open data.** `/data/` lists every docket, entry, gate and date as JSON and CSV files, rebuilt with the site.
+
+**App.** On a phone, readers can add Docket Wire to their home screen, and dockets they have opened stay readable offline.
+
 ## Where it lives
 
 The site is live at https://collinsown.github.io/docketwire/ and its files are in the GitHub repository `collinsown/docketwire`. Every change you commit republishes the site in about a minute, and it also rebuilds itself every morning at 06:00 Nairobi time, so dates that have passed drop off the cause list.
@@ -113,6 +131,7 @@ With Node.js 18 or later installed, run `node build.js serve` in this folder and
 - `content/pages/` About and Privacy
 - `content/subscribe-embed.html` the beehiiv form code
 - `site.config.json` name, tagline, contact email and social links
-- `assets/` styles, fonts, icons and the share image
+- `assets/` styles, fonts, icons and the standard share image
+- `assets/fonts/og/` the fonts used to draw each docket's share image
 - `build.js` the builder
 - `.github/workflows/publish.yml` the publishing instructions for GitHub
